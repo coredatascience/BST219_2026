@@ -1,0 +1,525 @@
+---
+title: 'BST 219: Core Principles of Data Science'
+subtitle: Introduction to R Markdown
+output:
+  pdf_document:
+    toc: true
+    toc_depth: '3'
+  html_document:
+    css: crimson.css
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    number_sections: true
+    df_print: paged
+    code_folding: show
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+# This is the "setup" chunk. It runs first and stays hidden (include=FALSE)
+# from the final document. We use it to set options that apply to every chunk.
+knitr::opts_chunk$set(
+  echo = TRUE,        # Show the R code in the final document
+  message = FALSE,    # Hide package start-up messages (keeps output tidy)
+  warning = FALSE,    # Hide warnings (keeps output tidy for beginners)
+  comment = "#>"      # Prefix printed output with "#>" so it's easy to spot
+)
+
+# This document needs NO add-on packages: the `pressure` dataset used below is
+# built into R, and the one knitr example is set not to run (eval = FALSE).
+```
+
+# Introduction {#introduction}
+
+You will be submitting your homework in the form of an R Markdown file (`.Rmd`) and a
+knitted HTML file (`.html`). This tutorial will help you navigate the R Markdown platform.
+
+**Why does this matter?** In public health, an analysis is only trustworthy if someone
+else can *reproduce* it. R Markdown lets you keep your writing, your R code, and your
+results (tables, figures, statistics) together in **one document** that anyone can re-run
+to get exactly the same answer. That is the foundation of reproducible science — and it's
+also simply a cleaner, faster way to write up a report than copying numbers by hand from
+one program into another.
+
+**What you'll learn in this document:**
+
+1. **Markdown** — a simple way to format text (bold, headers, links, images, lists) using
+   characters you already type.
+2. **knitr** — the engine that runs your R code and captures its output.
+3. **rmarkdown** — the package that ties everything together and produces the final HTML.
+4. **Embedding code, equations, caching, and extracting code** — the practical skills
+   you'll use on every assignment.
+
+You do **not** need any prior programming experience to follow along. This very document
+*is* an R Markdown file, so it also serves as a working example you can imitate.
+
+<div class="callout tip">
+<span class="label">How to use this document</span>
+Read the explanation, look at the example, then open the source `.Rmd` in RStudio and try
+typing the same thing yourself. The fastest way to learn R Markdown is to change something
+small, click **Knit**, and see what happens.
+</div>
+
+<div class="callout tip">
+<span class="label">A note on styling</span>
+This document gets its crimson look from a companion file named <code>crimson.css</code>.
+Keep that file in the same folder as this <code>.Rmd</code> when you knit it. (Your homework
+does <em>not</em> need custom styling — this is just to make the tutorial pleasant to read.)
+</div>
+
+# Markdown {#markdown}
+
+Markdown is a simplified version of 'markup' languages. Unlike cumbersome word processing applications, text written in Markdown uses simple and intuitive formatting elements and can be easily shared between computers, mobile phones, and people. It's quickly becoming the writing standard for academics, scientists, writers, and many more. Websites like GitHub and reddit use Markdown to style their comments.
+
+Formatting text in Markdown has a very gentle learning curve. It doesn't do anything fancy like change the font size, color, or type - just the essentials, using keyboard symbols you already know. All you have control over is the display of the text-stuff like making things bold, creating headers, and organizing lists.
+
+We won't go into a lot of detail, but will run through a few basic examples. For more details and examples, click [here](https://www.markdowntutorial.com/).
+
+## Italics and Bold {#italics-and-bold}
+
+To make a phrase italic in Markdown, you can surround words with a single underscore (`_`) or asterisk (`*`). For example, _this_ word would become italic.
+
+Similarly, to make phrases bold in Markdown, you can surround words with two underscores (`__`) or two asterisks ( `**` ). This will **really** get your point across.
+
+Most commonly, a single underscore is used for italics and two asterisks are used for bold.
+
+Of course, you can use **_both_** italics and bold in the same line by adding both an underscore and asterisks (`**_`). You can also span them **_across multiple words_**.
+
+In general, it doesn't matter which order you place the asterisks or underscores. I prefer to place the asterisks on the outside to make it **_easier to read_**.
+
+<div class="callout keyidea">
+<span class="label">Key idea</span>
+The symbol goes <em>immediately</em> next to the word, with no space in between:
+<code>**bold**</code> works, but <code>** bold **</code> does not.
+</div>
+
+## Headers {#headers}
+
+Headers are frequently used on websites, magazine articles, and notices, to draw attention to a section. As their name implies, they act like titles or subtitles above sections.
+
+There are six sizes of header, from largest to smallest. **What you type** is a hash mark
+(`#`) in front of the text — one hash for the biggest header, up to six hashes for the
+smallest:
+
+```
+# Header one
+## Header two
+### Header three
+#### Header four
+##### Header five
+###### Header six
+```
+
+**How those render**, from largest to smallest:
+
+<div class="callout">
+<span class="label">What they look like</span>
+<h1>Header one</h1>
+<h2>Header two</h2>
+<h3>Header three</h3>
+<h4>Header four</h4>
+<h5>Header five</h5>
+<h6>Header six</h6>
+</div>
+
+To make headers in Markdown, you preface the phrase with a hash mark (`#`). You place the same number of hash marks as the size of the header you want. For example, for a header one, you'd use one hash mark (`# Header One`), while for a header three, you'd use three (`### Header Three`). It's up to you to decide when it's appropriate to use which header. In general, headers one and six should be used sparingly.
+
+<div class="callout tip">
+<span class="label">Tip</span>
+Always leave a blank line <em>before</em> a header, and put a space after the hash marks
+(<code># Header</code>, not <code>#Header</code>). Forgetting either is the most common
+reason a header "won't work."
+</div>
+
+## Links {#links}
+
+There are two different link types in Markdown, but both of them render the exact same way. The first link style is called an **_inline_** link. To create an inline link, you wrap the link text in brackets (`[ ]`), and then you wrap the link in parenthesis (`( )`). For example, to create a hyperlink to www.github.com, with a link text that says, Visit GitHub!, you'd write this in Markdown: [Visit GitHub!](https://github.com/)
+
+The other link type is called a **_reference_** link. As the name implies, the link is actually a reference to another place in the document. Here's an example:
+
+Here's [a link to something else][another place].  
+Here's [yet another link][another link].  
+And now back to [the first link][another place].  
+
+[another place]: https://rstudio.github.io/cheatsheets/
+[another link]: https://www.hsph.harvard.edu/
+
+The "references" above are the second set of brackets: [another place] and [another link]. These brackets are defined as proper links to outside websites. An advantage of the reference link style is that multiple links to the same place only need to be updated once. For example, if we decide to make all of the [another place] links go somewhere else, we only have to change the single reference link.
+
+Reference links don't appear in the rendered Markdown. You define them by providing the same tag name wrapped in brackets, followed by a colon, followed by the link (as above).
+
+## Images {#images}
+
+If you know how to create links in Markdown, you can create images, too. The syntax is nearly the same.
+
+Images also have two styles, just like links, and both of them render the exact same way. The difference between links and images is that images are prefaced with an exclamation point (`!`).
+
+The first image style is called an **_inline image link_**. To create an inline image link, enter an exclamation point (`!`), wrap the alt text in brackets (`[ ]`), and then wrap the link in parenthesis (`( )`). (Alt text is a phrase or sentence that describes the image for the visually impaired).
+
+For example, to create an inline image link to https://octodex.github.com/images/bannekat.png, with an alt text that says, Benjamin Bannekat, you'd write this in Markdown:
+
+![Benjamin Bannekat](https://octodex.github.com/images/bannekat.png){ width=50% }
+
+
+Although you don't _need_ to add alt text, it will make your content accessible to your audience, including people who are visually impaired, use screen readers, or do not have high speed internet connections. The image I chose is actually much larger so I added `{ width=50% }` to shrink it a bit.
+
+For a reference image, you'll follow the same pattern as a reference link. You'll precede the Markdown with an exclamation point, then provide two brackets for the alt text, and then two more for the image tag. At the bottom of your Markdown page, you'll define an image for the tag.
+
+Here's an example: the first reference tag is called "First Father", and links to http://octodex.github.com/images/founding-father.jpg; the second image links out to http://octodex.github.com/images/foundingfather_v2.png.
+
+
+![The first father][First Father]
+
+![The second first father][Second Father]
+
+[First Father]: http://octodex.github.com/images/founding-father.jpg { width=50% }
+
+[Second Father]:http://octodex.github.com/images/foundingfather_v2.png { width=50% }
+
+<div class="callout tip">
+<span class="label">Accessibility matters</span>
+In public health especially, your reports may be read by people using screen readers.
+Always write meaningful alt text that describes what the figure shows — not just "figure 1".
+</div>
+
+## Lists {#lists}
+
+There are two types of lists in the known universe: unordered and ordered. That's a fancy way of saying that there are lists with bullet points, and lists with numbers.
+
+To create an unordered list, you'll want to preface each item in the list with an asterisk (`*`). Each list item also gets its own line. For example, a grocery list in Markdown might look like this:
+
+* Milk
+* Eggs
+* Salmon
+* Butter
+
+An ordered list is prefaced with numbers, instead of asterisks. For example:
+
+1. Crack three eggs over a bowl
+2. Pour a gallon of milk into the bowl
+3. Rub the salmon vigorously with butter
+4. Drop the salmon into the egg-milk bowl
+
+Easy, right? It's just like you'd expect a list to look.
+
+<div class="callout tip">
+<span class="label">Tip</span>
+Leave a blank line before a list starts. Without it, Markdown may run your bullets into the
+previous paragraph.
+</div>
+
+# knitr {#knitr}
+
+`knitr` is an R package that is used for _statistical literate programming_, meaning you are able to integrate code and text in a single, simple document format. It supports `R Markdown`, `R LaTex`, and `R HTML` as documentation languages, and can export `markdown`, `PDF` and `HTML` documents.
+
+Something that is really nice about using `R Markdown` with `knitr` is that your final document will not be created if there is an error in your code. Thus, it's really easy to check if your code is running by simply `knitting` the `.Rmd` file.
+
+Make sure to install the latest version of the `knitr` package: `install.packages("knitr")`.
+
+<div class="callout keyidea">
+<span class="label">Key idea</span>
+"Literate programming" just means <em>code and explanation living side by side</em>. Because
+knitting fails when your code has an error, a document that knits successfully is a quick
+proof that your whole analysis actually runs start to finish.
+</div>
+
+# rmarkdown {#rmarkdown}
+
+Documents, like this one, containing both R code (below) and markdown are `R Markdown` files. The similarly named `rmarkdown` is an R package that makes working with `R Markdown` easier by wrapping `knitr` along with other tools. For more details on both the `R Markdown` format and the `rmarkdown` package, see <http://rmarkdown.rstudio.com>.
+
+When you run `render` from the `rmarkdown` package (or click the **Knit** button above), the `.Rmd` file is fed to `knitr`, which executes all of the code chunks and creates a new markdown (`.md`) document which includes the code and it's output.
+
+The markdown file generated by `knitr` is then processed by pandoc which is responsible for creating the finished format.
+
+![](http://rmarkdown.rstudio.com/lesson-images/RMarkdownFlow.png)
+
+<div class="callout keyidea">
+<span class="label">The three names, untangled</span>
+<strong>Markdown</strong> is the simple text-formatting language. <strong>knitr</strong> is
+the engine that <em>runs your R code</em> and captures the output. <strong>rmarkdown</strong>
+is the package that coordinates the whole process and calls <strong>pandoc</strong> to build
+the final HTML/PDF. You mostly just click <strong>Knit</strong>; these tools do the rest.
+</div>
+
+## Embedding Code {#embedding-code}
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R 'code chunks' within the document. We **ALWAYS** want to see your code and output. If you do not provide the code and output in the `.Rmd` file, you will lose points. In addition to the `.Rmd` file, we expect you to provide a knitted `.html` file in your GitHub homework repository. We will also knit your `.Rmd` file on our own computers while grading, to make sure we can reproduce your results.
+
+### Code Chunks {#code-chunks}
+
+There are 3 ways to create a code chunk:  
+
+1. Typing `` ```{r} `` to start a code chunk and then ` ``` ` to end a code chunk  
+2. The keyboard shortcut **Ctrl + Alt + I** (OS X: **Cmd + Option + I**)  
+3. Clicking the Add Chunk button in the tool bar
+
+Let's start with the built-in data set `pressure`, which includes data on the vapor pressure of Mercury as a function of temperature. You can embed an R code chunk like this:
+
+```{r pressure-example}
+# `pressure` is a small dataset built into R (no package needed to load it).
+head(pressure)      # Show the first 6 rows so we can see the columns and values
+summary(pressure)   # Show summary statistics (min, median, mean, max) for each column
+```
+
+**What this chunk does:** the first line, `head(pressure)`, prints the top six rows of the
+`pressure` dataset so you can eyeball its structure — here, a `temperature` column and a
+`pressure` column. The second line, `summary(pressure)`, reports quick descriptive
+statistics for each column. Note that both the code written and output produced are shown in
+the final document.
+
+<div class="callout tip">
+<span class="label">Why this is powerful</span>
+You never copy-paste numbers into your report. If the data changes, you just re-knit and
+every table and figure updates automatically — no transcription errors.
+</div>
+
+## Equations {#equations}
+
+If you know latex, including equations is really simple. The same syntax is used. For example, you can write an _inline_ equation like this - $A = \pi*r^{2}$. You can also center an equation like this:
+
+\begin{equation}
+\mathbb{E}[Y] = \beta_0 + \beta_1x
+\end{equation}
+
+Equations are written in **LaTeX** syntax. Wrap math in single dollar signs (`$ ... $`) to
+place it *inline* within a sentence, or use an equation environment (or double dollar signs,
+`$$ ... $$`) to display it centered on its own line. This is how you'll typeset statistical
+models — like the simple linear regression above — in your write-ups.
+
+## The `cache` option {#the-cache-option}
+
+All code chunks have to be re-computed every time you re-knit the file. If you have code chunks that take a while to process, you may want to use the `cache = TRUE` option which stores and then loads the results from cache after the first run, and can save you considerable time. This can be done on a chunk-by-chunk basis. However, this is only useful if you have code chunks you haven't edited since the first run. If the data or code changes, you will have to re-run the code to update the results.
+
+<div class="callout tip">
+<span class="label">Use with care</span>
+Caching is a convenience for slow steps, but a stale cache can quietly hide changes. If
+results look wrong after an edit, delete the cache folder and re-knit from scratch.
+</div>
+
+## Extracting R code {#extracting-r-code}
+
+In `knitr`, you can use `purl()` to pull out all of the R code and put it into a single `.R` file. This will ignore all text outside of code chunks. The following code will create a file called `intro-to-rmarkdown.R` in the same directory I'm working in.
+
+```{r purl-example, eval=FALSE}
+# This chunk is set to eval = FALSE, so it is DISPLAYED but not RUN when knitting.
+library(knitr)                                        # Load the knitr package
+purl("intro-to-rmarkdown.Rmd", documentation = 0)    # Extract all R code into a .R script
+```
+
+**What this chunk does:** `purl()` reads through an `.Rmd` file, throws away all the prose,
+and saves just the R code into a plain `.R` script — handy when you want to run or share the
+code by itself. The `documentation = 0` argument keeps the output as bare code with no
+commentary. We set `eval = FALSE` here so the example only *shows* the command without
+actually creating a file on your computer while this tutorial knits.
+
+## Summary {#summary}
+
+![](https://sachsmc.github.io/knit-git-markr-guide/knitr/img/knitr-workflow.png)
+
+## Other Awesome Powers {#other-awesome-powers}
+
+R Markdown can render PDF presentations with beamer, HTML presentations with ioslides, slidy and reveal.js. It can also be used to write full academic manuscripts. You can also build your own websites and interactive documents. These powers are too complicated and time consuming for this lecture, but at least you know they're possible!
+
+# Self-Assessment Questions {#self-assessment}
+
+Try each question **before** revealing the answer. They build from foundational to
+challenging, and cover everything above. Click **"Show answer"** to check your work. In the
+answers below, `code font` shows the exact Markdown or R you would type.
+
+## Beginner {#beginner}
+
+**Q1.** How do you make the word *analysis* **bold**? How do you make it *italic*?
+
+<details>
+<summary>Show answer</summary>
+
+Bold: `**analysis**` (or `__analysis__`). Italic: `_analysis_` (or `*analysis*`).
+The formatting symbols must touch the word, with no spaces inside.
+
+</details>
+
+**Q2.** Write the Markdown to create a second-level header titled **Methods**.
+
+<details>
+<summary>Show answer</summary>
+
+`## Methods` — two hash marks, a space, then the title. (One `#` = biggest header,
+six `######` = smallest.)
+
+</details>
+
+**Q3.** Write an unordered (bullet) list containing three items: Milk, Eggs, and Butter.
+
+<details>
+<summary>Show answer</summary>
+
+```
+* Milk
+* Eggs
+* Butter
+```
+
+Each item goes on its own line, prefaced with an asterisk. Leave a blank line before the list.
+
+</details>
+
+**Q4.** When you submit homework, which two files must you turn in?
+
+<details>
+<summary>Show answer</summary>
+
+The R Markdown source file (`.Rmd`) **and** the knitted output (`.html`). Both are required —
+the `.Rmd` so graders can re-run your work, and the `.html` so they can see your results.
+
+</details>
+
+## Intermediate {#intermediate}
+
+**Q5.** Write an inline link with the text **Harvard Chan** that points to
+`https://www.hsph.harvard.edu/`.
+
+<details>
+<summary>Show answer</summary>
+
+`[Harvard Chan](https://www.hsph.harvard.edu/)` — link text in square brackets, the URL in
+parentheses right after.
+
+</details>
+
+**Q6.** Write the Markdown to display an image from `https://example.com/plot.png` with the
+alt text **Study workflow**.
+
+<details>
+<summary>Show answer</summary>
+
+`![Study workflow](https://example.com/plot.png)` — the same as a link, but with a `!` in
+front. The text in brackets is the alt text (a description for screen readers).
+
+</details>
+
+**Q7.** Write a code chunk that displays the first few rows of the built-in `pressure`
+dataset, so that both the code *and* its output appear in the knitted document.
+
+<details>
+<summary>Show answer</summary>
+
+Open a chunk with a line reading `` ```{r} ``, put `head(pressure)` on the next line, then
+close it with a line reading ` ``` `. Because the default option `echo = TRUE` is on, both
+the code and the resulting table will appear in your knitted file.
+
+</details>
+
+## Advanced {#advanced}
+
+**Q8.** You have one slow code chunk that you haven't edited since the last knit. Which chunk
+option can speed up re-knitting, and what is the risk?
+
+<details>
+<summary>Show answer</summary>
+
+Set `cache = TRUE` on that chunk (e.g. `` ```{r, cache=TRUE} ``). It saves the results and
+reloads them instead of recomputing. The risk: if the code or data changes, the cached result
+can become **stale**, so you must re-run (or clear the cache) to get correct output.
+
+</details>
+
+**Q9.** What does the chunk option `eval = FALSE` do, and why was it used on the `purl()`
+example earlier in this document?
+
+<details>
+<summary>Show answer</summary>
+
+`eval = FALSE` tells knitr to **show** the code but **not run** it. It was used on the
+`purl()` example so the command is visible for teaching without actually creating a `.R` file
+on the reader's computer during knitting.
+
+</details>
+
+**Q10.** In order, describe what happens when you click the **Knit** button.
+
+<details>
+<summary>Show answer</summary>
+
+1. **knitr** executes every code chunk in the `.Rmd` and produces a plain markdown (`.md`)
+   file that contains your text plus each chunk's code and output.
+2. **pandoc** takes that `.md` file and converts it into the finished format (HTML, PDF, etc.).
+3. If any chunk errors out, knitting **stops** and no document is produced — which is how you
+   know your code runs cleanly.
+
+</details>
+
+**Q11.** Write an *inline* LaTeX equation for the area of a circle, and a *centered* (display)
+equation for a simple linear model.
+
+<details>
+<summary>Show answer</summary>
+
+Inline: `$A = \pi r^2$` renders within a sentence. Centered: wrap it in double dollar signs,
+`$$ E[Y] = \beta_0 + \beta_1 x $$`, to display it on its own line.
+
+</details>
+
+# Frequently Asked Questions (FAQ) {#faq}
+
+**What's the difference between the `.Rmd` and the `.html` file, and which do I submit?**
+The `.Rmd` is your *source* — the plain-text file where you write everything. The `.html` is
+the *output* you get after clicking **Knit**. For homework you submit **both**: the `.Rmd` so
+graders can re-run it, and the `.html` so they can see your finished results.
+
+**What does "knit" mean?**
+Knitting is the one-click process that runs all your code and assembles the final document.
+In RStudio, the **Knit** button sits at the top of the editor. Behind the scenes, knitr runs
+your code and pandoc builds the HTML.
+
+**My document won't knit — it stops on an error. Is something broken?**
+Usually yes, and that's a *feature*, not a bug. R Markdown refuses to produce a document if
+any chunk fails, which guarantees your final file actually runs. Read the error message,
+find the chunk it names, and fix that line. Running your chunks one at a time (the green ▶
+arrow) helps you locate the problem.
+
+**What's the difference between Markdown, knitr, and rmarkdown?**
+Markdown is the simple language for *formatting text*. knitr is the engine that *runs your R
+code* and captures its output. rmarkdown is the package that *coordinates everything* and
+calls pandoc to create the final file. In practice you just click **Knit** and they cooperate.
+
+**Do I really have to show my code?**
+Yes. This course expects to see both your code and its output in every submission — hiding the
+code will cost points. (The chunk option `echo = FALSE` hides code, so do **not** use it on
+graded work unless you're told to.)
+
+**My bold/italic/header isn't rendering. What went wrong?**
+The three most common causes: (1) you left a space inside the symbols (`** text **` instead of
+`**text**`); (2) you forgot the space after a header's hash marks (`#Title` instead of
+`# Title`); or (3) you didn't leave a blank line before a header or list. Markdown is picky
+about that blank line.
+
+**What's the difference between a code chunk and inline code?**
+A *chunk* is a multi-line block that starts with `` ```{r} `` on its own line — use it for
+real analysis. *Inline code* is written inside single backticks within a sentence, like
+`` `r round(3.14159, 2)` ``, and is handy for dropping a computed number directly into your
+prose.
+
+**How do I add a plot to my document?**
+Just put the plotting code inside a chunk (for example `plot(pressure)`). When you knit, the
+figure appears automatically right below the code — no saving or importing images needed.
+
+**A chunk takes forever to run every time I knit. Can I speed that up?**
+Add `cache = TRUE` to that chunk so its results are saved and reused. Just remember to re-run
+(or clear the cache) if you later change that chunk's code or data, so the results stay
+accurate.
+
+**Where can I learn more?**
+The [Markdown tutorial](https://www.markdowntutorial.com/) linked above is a great start, the
+official R Markdown site (<http://rmarkdown.rstudio.com>) has full documentation, and the
+RStudio [cheatsheets](https://rstudio.github.io/cheatsheets/) are excellent one-page references
+to keep beside you.
+
+<div class="callout keyidea">
+<span class="label">You're ready</span>
+You now know how to format text in Markdown, embed and run R code, typeset equations, and
+knit everything into a polished, reproducible document. Everything you submit this semester
+builds on these skills — so keep this file handy as a reference.
+</div>
