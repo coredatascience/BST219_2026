@@ -1,0 +1,904 @@
+---
+title: "BST 219: Core Principles of Data Science"
+subtitle: "R Basics"
+output:
+  html_document:
+    css: crimson.css
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    number_sections: true
+    df_print: paged
+    code_folding: show
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+# This is a "setup" chunk. It runs first and quietly (include=FALSE hides it).
+# Here we set some global options so the rest of the document looks clean.
+knitr::opts_chunk$set(
+  echo = TRUE,        # Show the R code in the final document
+  message = FALSE,    # Hide package start-up messages (keeps output tidy)
+  warning = FALSE,    # Hide warnings (keeps output tidy for beginners)
+  comment = "#>"      # Prefix printed output with "#>" so it's easy to spot
+)
+
+# Load the ONLY package this document needs: dslabs.
+# dslabs ("Data Science Labs") ships with the practice datasets we use below.
+library(dslabs)
+```
+
+# Introduction {#introduction}
+
+Welcome! This document is a **friendly, hands-on introduction to the R programming
+language**, written for graduate students in public health who have little or no
+prior coding experience. You do not need to be a programmer to succeed here — you
+just need curiosity and a willingness to try things.
+
+**Why does this matter for public health?** Nearly every question in modern public
+health — *Which states have the highest mortality rates? Is life expectancy improving
+over time? Are admissions rates fair across groups?* — is answered with **data**. R
+is one of the most widely used free tools in the world for working with health data.
+Learning it lets you:
+
+- clean and organize messy real-world data,
+- calculate rates, summaries, and statistics,
+- create figures for reports and publications, and
+- do all of the above in a way that is **reproducible** — meaning anyone (including
+  future-you) can re-run your analysis and get the same answer.
+
+**What you will learn in this document.** We start from the smallest building blocks
+and work upward:
+
+1. **Data Types** — the different kinds of information R can store (numbers, text, logical true/false values, and tables).
+2. **Vectors** — how R stores a *sequence* of values, which is the heart of almost everything in R.
+3. **Sorting** — putting data in order and finding the largest or smallest values.
+4. **Indexing** — pulling out exactly the pieces of data you want (a superpower for filtering).
+5. **Basic Plots** — turning numbers into pictures.
+6. **Programming Basics** — writing simple logic, functions, and loops to automate work.
+
+Throughout, we use small, real public-health-flavored datasets that come built into
+the `dslabs` package, so you can run every example yourself.
+
+<div class="callout tip">
+<span class="label">How to use this document</span>
+Read the explanation, then look at the code chunk directly below it, then look at the
+output. Every line of code has a `#` comment explaining what it does. Try changing a
+value and re-running the chunk — breaking things and fixing them is how people learn R.
+</div>
+
+<div class="callout tip">
+<span class="label">Before you begin</span>
+This document uses only **one** add-on package, `dslabs`. If you have never installed
+it, run this **once** in your R console (not in this document):
+`install.packages("dslabs")`. After that, the line `library(dslabs)` loads it whenever
+you need it.
+</div>
+
+---
+
+# Data Types {#data-types}
+
+Everything in R is a piece of information with a **type**. Knowing the type matters
+because R treats numbers, words, and true/false values very differently. The function
+`class()` tells you the type of any object.
+
+In the chunk below we create several objects using the **assignment arrow** `<-`
+(read it as *"gets"*: `x <- 2` means *"x gets the value 2"*), and then ask R for the
+class of each.
+
+```{r data-types-basic}
+x <- 2            # A whole number... but R stores it as "numeric" (a decimal) by default
+class(x)          # -> "numeric"
+
+y <- 3.14         # A number with a decimal point
+class(y)          # -> "numeric"
+
+z <- "Boston"     # Text (called a "character string") — note the quotation marks
+class(z)          # -> "character"
+
+a <- TRUE         # A logical value: either TRUE or FALSE (no quotes)
+class(a)          # -> "logical"
+
+data(gapminder)   # Load the built-in "gapminder" dataset from dslabs
+d <- gapminder    # Copy it into a shorter name, d, so it's easier to type
+class(d)          # -> "data.frame": a table with rows and columns
+
+# A "list" can hold many different types of information together in one object.
+record <- list(name = "John Doe",
+               student_id = 1234,
+               grades = c(95, 82, 91, 97, 93),
+               final_grade = "A")
+class(record)     # -> "list"
+```
+
+<div class="callout keyidea">
+<span class="label">Key idea</span>
+The four everyday "atomic" types are **numeric** (numbers), **character** (text in quotes),
+**logical** (`TRUE`/`FALSE`), and **integer**. A **data frame** is a table (rows = observations,
+columns = variables) — this is how nearly all health datasets are stored. A **list** is a
+flexible container that can hold a mix of anything.
+</div>
+
+## Looking inside a dataset
+
+Before analyzing data, you should always *look* at it. Two workhorse functions help:
+`str()` shows the **str**ucture (variable names, types, and a few example values), and
+`head()` shows the first six rows.
+
+```{r data-types-str}
+data(gapminder)   # Make sure the gapminder data is loaded
+str(gapminder)    # Show the structure: each variable, its type, and sample values
+
+head(gapminder)   # Show just the first 6 rows so we can eyeball the table
+```
+
+## Columns, and the `$` operator
+
+Each column in a data frame is a variable. The dollar sign `$` is how you grab a
+single column by name, using the pattern `dataset$column`.
+
+Here we load a small dataset of university `admissions` and pull out its `major` column.
+
+```{r data-types-dollar}
+data(admissions)      # Load the built-in admissions dataset
+names(admissions)     # List the column (variable) names in the table
+admissions$major      # Extract the "major" column using dataset$column
+```
+
+A single column that you have pulled out is itself a **vector** (our next topic).
+We can measure how long it is and check its type:
+
+```{r data-types-vector-length}
+majors <- admissions$major   # Save the major column into its own object
+length(majors)               # How many values does it contain?
+class(majors)                # What type are those values?
+```
+
+Columns can also be **factors** — a special type R uses for categories (like region or
+country). Factors look like text but are stored efficiently as labeled categories.
+
+```{r data-types-factor}
+head(gapminder)              # Peek at the gapminder table again
+class(gapminder$country)     # The "country" column is a factor (a categorical variable)
+```
+
+---
+
+# Vectors {#vectors}
+
+A **vector** is simply an ordered sequence of values of the *same type* — think of it
+as a single column of a spreadsheet. Vectors are the most important object in R:
+almost every dataset is built from them. We create vectors with the function `c()`,
+which stands for **c**ombine.
+
+```{r vectors-create}
+codes <- c(380, 124, 818)          # A numeric vector of three country codes
+codes
+
+country <- c("italy", "canada", "egypt")   # A character vector (note the quotes!)
+country
+```
+
+<div class="callout tip">
+<span class="label">Common beginner error</span>
+Text values always need quotes. The chunk below tries to build a vector from
+<em>unquoted</em> words, so R looks for objects named <code>italy</code>, <code>canada</code>,
+and <code>egypt</code>, can't find them, and throws an error. (This chunk is set not to
+run so the document still knits — try running it yourself to see the error message.)
+</div>
+
+```{r vectors-error, eval=FALSE}
+country <- c(italy, canada, egypt)   # ERROR: no quotes, so R can't find these "objects"
+```
+
+## Naming the elements of a vector
+
+You can attach a **name** to each element, which makes vectors much easier to read.
+There are three equivalent ways to do it:
+
+```{r vectors-names}
+# Way 1: assign names inside c() using name = value
+codes <- c(italy = 380, canada = 124, egypt = 818)
+codes
+names(codes)          # Show just the names
+
+# Way 2: same thing, but with the names in quotes (also fine)
+codes <- c("italy" = 380, "canada" = 124, "egypt" = 818)
+codes
+
+# Way 3: build the values first, then add names afterward with names()
+codes <- c(380, 124, 818)
+country <- c("italy", "canada", "egypt")
+names(codes) <- country     # Attach the country names to the code values
+codes
+```
+
+## Creating sequences
+
+R gives you quick shortcuts for building runs of numbers. `seq()` makes a **seq**uence,
+and the colon `:` is a shortcut for counting by ones.
+
+```{r vectors-seq}
+seq(1, 10)               # The numbers 1 through 10
+seq(1, 10, 2)            # From 1 to 10, counting by 2: 1, 3, 5, 7, 9
+1:10                     # Shortcut for seq(1, 10)
+class(1:10)              # -> "integer" (the colon makes whole-number integers)
+class(seq(1, 10, 0.5))   # -> "numeric" (step of 0.5 forces decimals)
+```
+
+## Subsetting: pulling out specific elements
+
+To grab elements from a vector, put their **position number(s)** or **name(s)** inside
+square brackets `[ ]`. This is called *subsetting* or *indexing*.
+
+```{r vectors-subset}
+codes                        # The full named vector, for reference
+codes[2]                     # The 2nd element (R counts starting at 1, not 0!)
+codes[c(1, 3)]               # Elements 1 and 3 together
+codes[1:2]                   # Elements 1 through 2
+codes["canada"]              # Grab by name instead of position
+codes[c("egypt", "italy")]   # Multiple elements by name, in any order you like
+```
+
+## Coercion: when R changes types on you
+
+A vector can only hold **one** type. If you mix types, R silently converts (or *coerces*)
+everything to the most flexible common type — usually character (text). This is a very
+common source of surprises, so it is worth seeing on purpose.
+
+```{r vectors-coercion}
+x <- c(1, "canada", 3)   # Mixing a number and text...
+x
+class(x)                 # -> "character": the numbers got turned into text!
+
+x <- 1:5                 # A clean numeric (integer) vector
+y <- as.character(x)     # Deliberately convert numbers to text
+y
+as.numeric(y)            # Convert text back to numbers — this works because it's "1","2",...
+```
+
+When R can't sensibly convert a value to a number, it returns `NA` (**N**ot **A**vailable,
+R's marker for missing data) and warns you:
+
+```{r vectors-na}
+x <- c("1", "b", "3")   # "b" is not a number
+as.numeric(x)           # -> 1, NA, 3  (the "b" becomes NA because it can't be a number)
+```
+
+<div class="callout keyidea">
+<span class="label">Key idea</span>
+If a calculation mysteriously fails, check your types with <code>class()</code>. Numbers
+hiding inside quotes ("42" instead of 42) are one of the most common causes of errors
+for beginners.
+</div>
+
+---
+
+# Sorting {#sorting}
+
+Sorting helps us find patterns — the highest and lowest values, rankings, and order.
+We'll use the `murders` dataset (U.S. gun murders by state in 2010) to practice.
+
+`sort()` simply arranges the values from smallest to largest.
+
+```{r sorting-sort}
+data(murders)            # Load the U.S. gun murders dataset
+sort(murders$total)      # Sort the "total murders" column from lowest to highest
+```
+
+## `order()` — sorting *one* thing by *another*
+
+`sort()` reorders values but loses track of *which state* each value belonged to.
+`order()` solves this: instead of the sorted values, it returns the **positions** that
+*would* sort the vector. You can then use those positions to reorder a *related* column.
+
+```{r sorting-order}
+x <- c(31, 4, 15, 92, 65)   # A small example vector
+sort(x)                     # The values in order: 4, 15, 31, 65, 92
+index <- order(x)           # The POSITIONS that put x in order: 2, 3, 1, 5, 4
+x[index]                    # Using those positions reproduces the sorted values
+x                           # (x itself is unchanged)
+order(x)                    # Show the ordering positions again
+
+data(murders)
+ind <- order(murders$total)   # Positions that sort states from fewest to most murders
+murders$abb[ind]              # Use them to list state abbreviations in that same order
+```
+
+## Finding the maximum (and where it is)
+
+`max()` gives the largest value; `which.max()` gives its **position**, which you can use
+to look up the matching state.
+
+```{r sorting-max}
+max(murders$total)              # The single largest number of murders
+
+i_max <- which.max(murders$total)   # The POSITION of that largest value
+i_max
+murders$state[i_max]            # Use that position to find WHICH state it was
+```
+
+## Ranking
+
+`rank()` reports each value's rank (1 = smallest), keeping the original order of the vector.
+
+```{r sorting-rank}
+x <- c(31, 4, 15, 92, 65)   # Same example vector
+rank(x)                     # -> 3 1 2 5 4  (e.g., 31 is the 3rd smallest)
+```
+
+---
+
+# Indexing {#indexing}
+
+**Indexing** — using `[ ]` together with logic — is how you *filter* data to answer
+real questions. This section is the analytic heart of the whole document.
+
+First, a warm-up combining ideas from before: compute a murder **rate** (murders per
+100,000 people, so states of different sizes can be compared fairly), then order the
+states by that rate.
+
+```{r indexing-rate}
+i_max <- which.max(murders$total)   # Position of the most murders (from before)
+murders$state[i_max]                # Which state that is
+
+head(murders)                       # Reminder of what the table looks like
+
+# Murder RATE = murders divided by population, scaled to a per-100,000 basis
+murder_rate <- murders$total / murders$population * 100000
+
+murders$state[order(murder_rate)]   # States listed from lowest to highest murder RATE
+```
+
+## Logical indexing (filtering)
+
+Comparisons like `<`, `>`, and `==` produce **logical vectors** of `TRUE`/`FALSE`.
+Placing a logical vector inside `[ ]` keeps only the elements where the condition is
+`TRUE`. This is filtering.
+
+```{r indexing-logical}
+murder_rate <- murders$total / murders$population * 100000
+ind <- murder_rate < 0.71   # TRUE for each state with a rate below 0.71, FALSE otherwise
+ind                         # A vector of TRUE/FALSE values, one per state
+sum(ind)                    # TRUE counts as 1, so sum() tells us HOW MANY states qualify
+murders$state[ind]          # Keep only the states where ind is TRUE
+```
+
+<div class="callout tip">
+<span class="label">Handy trick</span>
+Because <code>TRUE</code> equals 1 and <code>FALSE</code> equals 0, <code>sum()</code> on a
+logical vector <em>counts</em> how many conditions are true, and <code>mean()</code> gives the
+<em>proportion</em> that are true.
+</div>
+
+## Combining conditions: `&`, `|`, and `!`
+
+You can join conditions with **AND** (`&`, both must be true), **OR** (`|`, at least one true),
+and **NOT** (`!`, flips true/false).
+
+```{r indexing-boolean}
+TRUE & TRUE        # AND: TRUE only if both sides are TRUE
+TRUE & FALSE       # AND: FALSE, because one side is FALSE
+FALSE & FALSE      # AND: FALSE
+
+west <- murders$region == "West"   # TRUE for states in the West region
+safe <- murder_rate <= 1           # TRUE for states with a low murder rate
+
+ind <- safe & west                 # Safe AND in the West
+murders$state[ind]
+
+ind <- safe | west                 # Safe OR in the West (either condition)
+murders$state[ind]
+
+ind <- safe & !west                # Safe AND NOT in the West
+murders$state[ind]
+```
+
+## Finding positions: `which()`, `match()`, and `%in%`
+
+`which()` returns the positions where a condition is `TRUE` — useful to locate one
+specific record.
+
+```{r indexing-which}
+ind <- which(murders$state == "California")   # Position of the California row
+ind   # this is the index that matches the California entry
+
+murder_rate[ind]   # Look up California's murder rate using that position
+```
+
+`match()` finds the positions of several items at once, in the order you asked for.
+If an item isn't found, it returns `NA`.
+
+```{r indexing-match}
+ind <- match(c("New York", "Florida", "Texas"), murders$state)   # Positions of these 3 states
+ind
+match(c("Boston", "Dakota", "Washington"), murders$state)        # "Boston"/"Dakota" -> NA (not states)
+murder_rate[ind]                                                 # Rates for NY, FL, TX
+```
+
+`%in%` answers a simple yes/no question for each item: *is it in this set?*
+
+```{r indexing-in}
+# For each name, is it found in the list of state names? (TRUE/FALSE)
+c("Boston", "Dakota", "Washington") %in% murders$state
+```
+
+---
+
+# Basic Plots {#basic-plots}
+
+A picture often reveals what a table of numbers hides. R has built-in plotting functions
+(no extra packages needed) for the four most common chart types.
+
+## Scatterplot
+
+A **scatterplot** shows the relationship between two numeric variables — here, whether
+states with larger populations tend to have more murders.
+
+```{r plots-scatter}
+population_in_millions <- murders$population / 10^6   # Convert population to millions (easier to read)
+total_gun_murders <- murders$total                    # The number of murders per state
+
+plot(x = population_in_millions, y = total_gun_murders,   # x vs y
+     xlab = "State Population (millions)",                # Label the x-axis
+     ylab = "Total gun murders in 2010")                  # Label the y-axis
+```
+
+## Histogram
+
+A **histogram** shows the distribution of a *single* numeric variable by grouping
+values into bars.
+
+```{r plots-hist}
+hist(murders$total)                          # Quick default histogram of total murders
+hist(murders$total, xlab = "Total gun murders (2010)",   # Add a clearer x-axis label
+     main = "")                              # main = "" removes the default title
+```
+
+## Boxplot
+
+A **boxplot** compares the distribution of a numeric variable *across categories* — here,
+murders by U.S. region. The `~` (tilde) is read as *"by"*: `total ~ region` means
+"total murders **by** region."
+
+```{r plots-box}
+boxplot(murders$total ~ murders$region)      # Distribution of murders, split by region
+boxplot(murders$total ~ murders$region,      # Same plot, with readable axis labels
+        xlab = "Region of the United States",
+        ylab = "Total gun murders (2010)")
+```
+
+## Bar plot
+
+A **bar plot** shows a value for each category using bar height. Here we first build a
+tiny summary table by hand, then plot it.
+
+```{r plots-bar}
+# Build a small data frame of region totals to plot
+data <- data.frame(
+  name  = c("Northeast", "South", "North Central", "West"),
+  value = c(1469, 4195, 1828, 1911))
+
+barplot(height = data$value, names = data$name,   # Bar heights and their labels
+        xlab = "Region of United States",
+        ylab = "Total gun murders (2010)")
+```
+
+---
+
+# Programming Basics {#programming-basics}
+
+So far we've asked R to do one thing at a time. Real analyses often need **logic**
+("if this, then that"), **functions** (reusable recipes), and **loops** (repeat a task).
+These three tools let you automate work and avoid copy-paste mistakes.
+
+## Making decisions: `if` / `else`
+
+An `if...else` statement runs one block of code when a condition is `TRUE` and another
+when it is `FALSE`.
+
+```{r prog-if}
+a <- 0
+
+# Because a IS 0, the condition (a != 0) is FALSE, so the else branch runs.
+if(a != 0){
+  print(1/a)                          # Runs only if a is NOT zero
+} else{
+  print("No reciprocal for 0.")       # Runs when a is zero (dividing by 0 is undefined)
+}
+
+a <- 2
+
+# Now a is 2, so (a != 0) is TRUE and the first branch runs.
+if(a != 0){
+  print(1/a)                          # Prints 0.5
+} else{
+  print("No reciprocal for 0.")
+}
+```
+
+## Vectorized decisions: `ifelse()`
+
+`if` handles a single value. `ifelse()` handles a **whole vector** at once, checking the
+condition element by element — extremely useful for whole columns of data.
+
+```{r prog-ifelse}
+a <- 0
+ifelse(a > 0, 1/a, NA)   # If a > 0 return 1/a, otherwise return NA. Here -> NA
+
+a <- c(0, 1, 2, -4, 5)               # A vector of values
+result <- ifelse(a > 0, 1/a, NA)     # Element by element: reciprocal if positive, else NA
+result                               # -> NA, 1.0, 0.5, NA, 0.2
+```
+
+Here's `ifelse()` used to write a plain-language message about the data:
+
+```{r prog-ifelse-data}
+data(murders)
+murder_rate <- murders$total / murders$population * 100000
+ind <- which.min(murder_rate)        # Position of the LOWEST murder rate
+
+# If the lowest rate is below 0.5, report that state; otherwise print a message.
+ifelse(murder_rate[ind] < 0.5, murders$state[ind],
+       print("Minimum murder rate is not that low."))
+
+# Same test with a stricter cutoff of 0.25 (the lowest rate is above this).
+ifelse(murder_rate[ind] < 0.25, murders$state[ind],
+       print("Minimum murder rate is not that low."))
+```
+
+## Writing your own function
+
+A **function** is a reusable recipe: you give it inputs, it runs some steps, and it
+returns an output. Defining one means you can reuse it forever without rewriting the code.
+
+```{r prog-function-def}
+# This function takes a state abbreviation and reports that state's murder rate.
+murder_rate_by_state <- function(state_abbr) {
+  # Keep only the row(s) whose abbreviation matches the input
+  state_data <- murders[murders$abb == state_abbr, ]
+
+  # Safety check: if no row matched, stop and warn the user
+  if (nrow(state_data) == 0) {
+    stop("Invalid state abbreviation.")
+  }
+
+  # Calculate the murder rate per 100,000 people
+  rate <- (state_data$total / state_data$population) * 100000
+
+  # Build and return a friendly sentence with the result
+  paste("The murder rate in", state_data$state, "is",
+        round(rate, 2), "per 100,000 people.")
+}
+```
+
+Now we can **call** (use) the function with different inputs:
+
+```{r prog-function-call}
+murder_rate_by_state("NY")        # New York
+
+murder_rate_by_state("CA")        # California
+
+# "ZZ" isn't a real state, so the function's safety check triggers stop().
+# We wrap it in try() so the error is caught and the document still knits.
+try(murder_rate_by_state("ZZ"))
+```
+
+The general shape of every function looks like this (shown for reference; not run):
+
+```{r prog-function-anatomy, eval=FALSE}
+# Anatomy of a function
+name <- function(x){   # "name" is what you'll call it; x is the input
+  code to run          # the steps the function performs
+  output               # the last value is returned as the result
+}
+```
+
+A tiny function that averages a set of numbers:
+
+```{r prog-avg}
+avg <- function(x){    # x is the input vector of numbers
+  s <- sum(x)          # Add up all the values
+  n <- length(x)       # Count how many values there are
+  s / n                # The last line is returned: the mean
+}
+
+x <- 1:100             # The numbers 1 through 100
+avg(x)                 # -> 50.5 (their average)
+```
+
+## Repeating with `for` loops
+
+A **loop** repeats a task many times. A `for` loop runs its body once for each value in
+a sequence — here, `i` takes the values 1, 2, 3, 4, 5 in turn.
+
+```{r prog-loop-simple}
+for(i in 1:5){   # Repeat for i = 1, then 2, ... up to 5
+  print(i)       # Print the current value of i each time
+}
+```
+
+A more realistic loop: step through each Northeast state and print its murder rate.
+
+```{r prog-loop-data}
+# First, filter the data down to just the Northeast region
+northeast_data <- murders[murders$region == "Northeast", ]
+
+# Loop over each row (each state) in that filtered table
+for (i in 1:nrow(northeast_data)) {
+  state_name <- northeast_data$state[i]       # The i-th state's name
+  # The i-th state's murder rate per 100,000
+  rate <- (northeast_data$total[i] / northeast_data$population[i]) * 100000
+  # cat() prints a custom message; "\n" starts a new line
+  cat(state_name, "has a murder rate of", round(rate, 2), "per 100,000 people.\n")
+}
+```
+
+## Putting it together
+
+Finally, a small function combined with column extraction — a pattern you'll use
+constantly in real analyses.
+
+```{r prog-together}
+# A reusable function that turns raw counts into a rate per 100,000
+compute_murder_rate <- function(total, population) {
+  rate <- (total / population) * 100000
+  return(rate)     # return() makes the output explicit (optional but clear)
+}
+
+# Pull New York's total murders and population out of the table
+ny_total <- murders$total[murders$state == "New York"]
+ny_pop   <- murders$population[murders$state == "New York"]
+
+# Feed those values into our function to get New York's rate
+compute_murder_rate(ny_total, ny_pop)
+```
+
+---
+
+# Self-Assessment Questions {#self-assessment}
+
+Try each question **before** revealing the answer. These build from foundational to
+challenging. Everything you need is covered above and uses only `dslabs` and base R.
+Click **"Show answer"** to check your work.
+
+## Beginner {#beginner}
+
+**Q1.** Create an object called `age` that stores the number `29`, then check its class.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+age <- 29        # Store 29 in an object called age
+class(age)       # -> "numeric"
+```
+
+</details>
+
+**Q2.** Build a character vector called `cities` containing "Boston", "New York", and
+"Chicago". How long is it?
+
+<details>
+<summary>Show answer</summary>
+
+```r
+cities <- c("Boston", "New York", "Chicago")   # Remember the quotes!
+length(cities)                                 # -> 3
+```
+
+</details>
+
+**Q3.** Using the `murders` dataset, display the first six rows and list the column names.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+data(murders)
+head(murders)      # First 6 rows
+names(murders)     # Column names: state, abb, region, population, total
+```
+
+</details>
+
+**Q4.** What will `class(c(1, 2, "three"))` return, and *why*?
+
+<details>
+<summary>Show answer</summary>
+
+It returns **"character"**. A vector can hold only one type, so R *coerces* the numbers
+`1` and `2` into text to match `"three"`. This is why mixing types accidentally can turn
+your numbers into strings.
+
+</details>
+
+## Intermediate {#intermediate}
+
+**Q5.** Add the murder rate (per 100,000) as reasoning: which single state has the
+*highest* total number of murders? (Hint: `which.max()`.)
+
+<details>
+<summary>Show answer</summary>
+
+```r
+data(murders)
+i <- which.max(murders$total)   # Position of the largest total
+murders$state[i]                # The state at that position (California)
+```
+
+</details>
+
+**Q6.** Compute the murder rate per 100,000 for every state, then list only the states
+with a rate **below 1**.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+murder_rate <- murders$total / murders$population * 100000   # Rate per 100k
+ind <- murder_rate < 1        # TRUE/FALSE for each state
+murders$state[ind]            # Keep states where the rate is below 1
+```
+
+</details>
+
+**Q7.** Using logical operators, find the states that are in the `"West"` region **and**
+have a murder rate at or below 1.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+murder_rate <- murders$total / murders$population * 100000
+west <- murders$region == "West"   # In the West?
+safe <- murder_rate <= 1           # Low rate?
+murders$state[west & safe]         # Both conditions TRUE
+```
+
+</details>
+
+**Q8.** Use `match()` to find the positions of "Texas" and "Ohio" in `murders$state`,
+then report their populations.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+ind <- match(c("Texas", "Ohio"), murders$state)   # Positions of the two states
+murders$population[ind]                            # Their populations
+```
+
+</details>
+
+## Advanced {#advanced}
+
+**Q9.** Write a function `rate_of()` that takes a state name (e.g., `"Florida"`) and
+returns its murder rate per 100,000, rounded to two decimals.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+rate_of <- function(state_name){
+  row  <- murders[murders$state == state_name, ]        # Filter to that state
+  rate <- (row$total / row$population) * 100000          # Compute the rate
+  round(rate, 2)                                         # Round and return it
+}
+
+rate_of("Florida")   # Try it out
+```
+
+</details>
+
+**Q10.** Using a `for` loop, print each **Northeast** state together with whether its
+murder rate is above or below the Northeast average. (Hint: compute the average first,
+then loop and use `ifelse()`.)
+
+<details>
+<summary>Show answer</summary>
+
+```r
+ne <- murders[murders$region == "Northeast", ]          # Northeast states only
+ne_rate <- ne$total / ne$population * 100000            # Rate for each
+avg_rate <- mean(ne_rate)                               # Northeast average
+
+for (i in 1:nrow(ne)) {
+  label <- ifelse(ne_rate[i] > avg_rate, "ABOVE", "below")  # Compare to average
+  cat(ne$state[i], "is", label, "the Northeast average.\n")
+}
+```
+
+</details>
+
+**Q11.** From the `gapminder` dataset, find the average `life_expectancy` for the year
+2000. (Hint: filter rows where `year == 2000`, then use `mean()` and handle missing
+values with `na.rm = TRUE`.)
+
+<details>
+<summary>Show answer</summary>
+
+```r
+data(gapminder)
+yr2000 <- gapminder[gapminder$year == 2000, ]       # Keep only year 2000 rows
+mean(yr2000$life_expectancy, na.rm = TRUE)          # Average, ignoring any NAs
+```
+
+`na.rm = TRUE` tells `mean()` to *remove* missing values before averaging; without it,
+any `NA` in the data would make the whole result `NA`.
+
+</details>
+
+---
+
+# Frequently Asked Questions (FAQ) {#faq}
+
+**What is a "chunk," and how do I run one?**
+A chunk is the shaded gray box of R code you see throughout this document (each one opens
+with a line marked `{r}` and closes with a matching fence line). In RStudio, click the
+small green ▶ arrow in the chunk's top-right corner to run it, or place your cursor
+inside and press **Ctrl+Enter** (**Cmd+Enter** on a Mac) to run one line at a time.
+
+**What's the difference between `<-` and `=`?**
+Both can assign a value to an object, and `x <- 2` and `x = 2` behave the same here. By
+strong convention, R users write `<-` for assignment and reserve `=` for setting
+arguments *inside* a function, like `plot(x = ..., y = ...)`. Following this habit makes
+your code easier for others (and future-you) to read.
+
+**Why do I keep getting `object 'xyz' not found`?**
+R is telling you it has never heard of `xyz`. Usually this means (1) you forgot the
+quotes around text (`Boston` instead of `"Boston"`), (2) you have a typo, or (3) you
+didn't run the earlier chunk that created the object. R is **case-sensitive**, so
+`Murders` and `murders` are different names.
+
+**Do I have to load `library(dslabs)` every time?**
+You need to run `library(dslabs)` once per R session (each time you open RStudio fresh).
+You only `install.packages("dslabs")` **once ever** on a given computer. In this
+document the package is loaded in the hidden setup chunk at the top, so all the examples
+just work.
+
+**What does the `$` do?**
+The `$` pulls one column out of a data frame by name: `murders$total` means "the `total`
+column from the `murders` table." The result is a vector you can then sort, filter, or
+plot.
+
+**Why did my numbers turn into text (or turn into `NA`)?**
+A vector can hold only one type. If you combine numbers with text, R coerces everything
+to character — so `c(1, "a")` becomes `"1" "a"`. Going the other way, `as.numeric("a")`
+can't make a number out of a letter, so it returns `NA` (missing) with a warning. When
+math suddenly fails, check your types with `class()`.
+
+**What is `NA`, and how is it different from `0` or `"NA"`?**
+`NA` means **missing / unknown**. It is not zero, and it is not the two-letter text
+`"NA"`. Most calculations involving `NA` return `NA` on purpose, to stop you from
+silently ignoring missing data. Many functions accept `na.rm = TRUE` to skip missing
+values (e.g., `mean(x, na.rm = TRUE)`).
+
+**Why does R start counting at 1?** Unlike some programming languages that start at 0,
+R indexes from **1**, so `x[1]` is the first element. This tends to feel natural to
+people coming from statistics and spreadsheets.
+
+**How do I get help on a function?**
+Type a question mark followed by the function name in the console, e.g. `?mean` or
+`?sort`, to open its help page. You can also search examples online — the R community is
+huge and welcoming.
+
+**Which should I use: a `for` loop or `ifelse()`?**
+Use `ifelse()` when you want to apply the *same* test across an entire vector or column
+(it's fast and concise). Reach for a `for` loop when each step depends on the last, or
+when you need to print or build something one item at a time.
+
+**Where can I keep learning?**
+This material follows the free, public-health-friendly *Introduction to Data Science*
+resources built around the `dslabs` package. Practicing by modifying the examples above —
+changing a state, a cutoff, or a variable — is the fastest way to build confidence.
+
+<div class="callout keyidea">
+<span class="label">You did it</span>
+You now know R's core building blocks: types, vectors, sorting, indexing, plotting, and
+basic programming. These same six ideas power even the most advanced public-health
+analyses — everything else builds on this foundation. Keep experimenting!
+</div>
