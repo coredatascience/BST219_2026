@@ -1,0 +1,593 @@
+---
+title: "BST 219: Core Principles of Data Science"
+subtitle: "Data Wrangling I"
+output:
+  html_document:
+    css: crimson.css
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    number_sections: true
+    df_print: paged
+    code_folding: show
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+# This is the "setup" chunk. It runs first and stays hidden (include=FALSE) from
+# the final document. We use it to set options that apply to every chunk below.
+knitr::opts_chunk$set(
+  echo = TRUE,        # Show the R code in the final document
+  message = FALSE,    # Hide package start-up messages (keeps output tidy)
+  warning = FALSE,    # Hide warnings (keeps output tidy for beginners)
+  comment = "#>"      # Prefix printed output with "#>" so it's easy to spot
+)
+```
+
+# Introduction {#introduction}
+
+Real public health data almost never arrives ready to analyze. Columns are in the wrong
+place, the variable you actually need (like a *rate*) hasn't been calculated yet, you want
+only a subgroup of rows, or the whole table is shaped in a way that fights the question you're
+asking. The work of getting messy data into a clean, analysis-ready form is called **data
+wrangling**, and analysts routinely spend the *majority* of a project on it.
+
+This document introduces the two workhorse tools of the **tidyverse** for wrangling:
+
+- **`dplyr`** — for *transforming* data: adding new columns, keeping certain rows, choosing
+  columns, sorting, and computing summaries (including summaries within groups).
+- **`tidyr`** — for *reshaping* data: converting between "wide" and "long/tidy" layouts, and
+  splitting or combining columns.
+
+Along the way you'll meet the **pipe** (`%>%`), which strings small steps into a readable
+recipe, and you'll see how to read data files into R.
+
+**Why this matters for public health.** Almost every analysis you'll do — comparing rates
+across states, tracking a measure over time, summarizing an outcome by group — starts with
+these exact operations. Learning the handful of verbs below gives you a vocabulary for
+turning raw data into evidence.
+
+**What you'll learn:**
+
+1. `mutate()`, `filter()`, `select()` — add columns, keep rows, choose columns.
+2. `summarize()` and `group_by()` — collapse data into summaries, overall or per group.
+3. `arrange()` and `slice()` — sort rows and pick rows by position.
+4. `pivot_longer()` and `pivot_wider()` — reshape between wide and tidy layouts.
+5. `separate()` and `unite()` — split one column into many, or combine many into one.
+
+<div class="callout tip">
+<span class="label">How to use this document</span>
+Read the short explanation, run the code chunk below it, then compare the output to what the
+explanation predicted. Every line of code has a <code>#</code> comment. Try changing a column
+name or a threshold and re-running — experimenting is the fastest way to learn.
+</div>
+
+<div class="callout tip">
+<span class="label">Packages &amp; styling</span>
+This tutorial uses <code>dslabs</code>, <code>dplyr</code>, and the broader
+<code>tidyverse</code>. If you haven't installed them, run once in your console:
+<code>install.packages(c("dslabs", "tidyverse"))</code>. The crimson look comes from a
+companion file, <code>crimson.css</code> — keep it in the same folder as this
+<code>.Rmd</code> when you knit.
+</div>
+
+# Part 1 — Transforming Data with `dplyr` {#part-1}
+
+The `dplyr` package gives you a small set of **verbs**, each doing one clear job to a data
+frame. You'll combine them with the pipe to build up an analysis one readable step at a time.
+
+## The pipe and `mutate()`: adding a column {#mutate}
+
+The `%>%` symbol is the **pipe**. It takes whatever is on its *left* and feeds it as the first
+input to the function on its *right*. Read it out loud as the word **"then."** So
+`murders %>% mutate(...)` reads as *"take `murders`, **then** add a new column."*
+
+The verb `mutate()` **adds a new column**. Below we create `murder_rate` — murders per
+100,000 people — which lets us compare states of very different sizes on a fair footing.
+
+```{r load-and-mutate, message=FALSE}
+library(dslabs)     # dslabs provides the practice datasets used throughout
+data(murders)       # Load the U.S. gun murders dataset (2010)
+head(murders)       # Peek at the first 6 rows: state, abb, region, population, total
+
+library(dplyr)      # dplyr provides the data-transformation "verbs" used below
+
+# mutate() ADDS a column. Here: murder_rate = murders per 100,000 people.
+murders <- murders %>% mutate(murder_rate = total / population * 100000)
+head(murders)       # The table now has an extra murder_rate column on the right
+```
+
+## `filter()`: keeping rows that meet a condition {#filter}
+
+Where `mutate()` works on columns, `filter()` works on **rows**: it keeps only the rows where
+a condition is `TRUE`. Below we keep the states whose murder rate is at or below an example
+threshold of 0.71.
+
+```{r filter-rows}
+# filter() KEEPS only rows where the condition is TRUE.
+murders %>% filter(murder_rate <= 0.71)   # Keep states with a low murder rate
+```
+
+<div class="callout tip">
+<span class="label">Watch out</span>
+To <em>test</em> whether two things are equal, use double equals <code>==</code> (e.g.
+<code>region == "West"</code>). A single <code>=</code> means "assign," and using it here is a
+very common beginner error.
+</div>
+
+## `select()`: choosing columns {#select}
+
+`select()` chooses **columns** by name. Pairing `select()` (columns) with `filter()` (rows)
+lets you zoom into exactly the slice of data you care about.
+
+```{r select-columns}
+# select() chooses columns; filter() chooses rows. Chain them with the pipe.
+murders %>%
+  select(state, region, murder_rate) %>%   # Keep just these three columns
+  filter(murder_rate <= 0.71)              # Then keep only the low-rate states
+```
+
+## `summarize()`: collapsing data to a summary {#summarize}
+
+`summarize()` **collapses many rows into a single summary row**. Here we compute one overall
+U.S. murder rate. Notice we sum the totals and sum the populations *first*, then divide — this
+is the correct national rate.
+
+```{r summarize-total}
+# summarize() collapses the whole table into one summary value.
+us_murder_rate <- murders %>%
+  summarize(murder_rate = sum(total) / sum(population) * 100000)
+
+us_murder_rate   # A 1-row table (a "tibble") holding the single value
+```
+
+<div class="callout keyidea">
+<span class="label">Key idea (and a common trap)</span>
+The national rate is <em>total murders ÷ total population</em>, <strong>not</strong> the
+average of the 50 state rates. Averaging the state rates would give small and large states
+equal weight and produce a different (wrong) number. This distinction matters constantly in
+epidemiology.
+</div>
+
+The result above is a small *table*. Sometimes you want the bare *number* instead. Inside a
+pipe, the dot `.` means "the data coming from the left," so `.$murder_rate` pulls that one
+column out as a plain value.
+
+```{r summarize-pull}
+# Pull the single value OUT of the 1x1 table using .$columnname
+us_murder_rate <- murders %>%
+  summarize(murder_rate = sum(total) / sum(population) * 100000) %>%
+  .$murder_rate
+
+us_murder_rate   # Now just a number, not a table
+```
+
+<div class="callout tip">
+<span class="label">Cleaner alternative</span>
+Modern <code>dplyr</code> offers <code>pull(murder_rate)</code>, which does the same thing as
+<code>.$murder_rate</code> but reads more clearly. Both are fine; you'll see both in the wild.
+</div>
+
+## `group_by()`: summaries within groups {#group-by}
+
+`group_by()` quietly splits the data into groups; a following `summarize()` then runs **once
+per group**. Together they answer questions of the form *"what's the value for each ___?"*
+
+```{r group-by}
+# group_by() forms groups; summarize() then computes one value PER group.
+murders %>%
+  group_by(region) %>%                          # One group per region
+  summarize(median_rate = median(murder_rate))  # Median murder rate within each region
+```
+
+<div class="callout keyidea">
+<span class="label">Key idea</span>
+<code>group_by()</code> changes nothing you can see on its own — it just tags the rows with
+their group. The effect appears only when the next verb (usually <code>summarize()</code>)
+runs separately for each group.
+</div>
+
+## `arrange()`: sorting rows {#arrange}
+
+`arrange()` **sorts** the rows. By default it sorts smallest-to-largest; wrap a column in
+`desc()` to sort largest-to-smallest.
+
+```{r arrange-sort}
+# arrange() sorts ascending (smallest first) by default.
+murders %>%
+  arrange(murder_rate) %>%   # Lowest murder rates first
+  head()                     # Show just the first 6 rows
+
+# desc() flips it to descending (largest first).
+murders %>%
+  arrange(desc(murder_rate)) %>%   # Highest murder rates first
+  head()
+```
+
+## `slice()`: selecting rows by position {#slice}
+
+`slice()` picks rows by their **position number** (as opposed to `filter()`, which picks rows
+by a condition).
+
+```{r slice-rows}
+murders %>% slice(1:10)            # Rows 1 through 10
+murders %>% slice(-c(3:5, 9:51))   # A minus sign DROPS rows: remove 3–5 and 9–51
+murders %>% slice_head(n = 3)      # The first 3 rows
+murders %>% slice_tail(n = 5)      # The last 5 rows
+```
+
+# Part 2 — Reshaping Data with `tidyr` {#part-2}
+
+Transforming data (Part 1) keeps the table's shape and changes its contents. **Reshaping**
+changes the *shape itself* — how rows and columns are laid out. The goal is usually **tidy
+data**.
+
+<div class="callout keyidea">
+<span class="label">What is "tidy data"?</span>
+Data is <strong>tidy</strong> when (1) each <em>variable</em> is its own column, (2) each
+<em>observation</em> is its own row, and (3) each <em>value</em> sits in its own cell. Most
+tidyverse tools — and most plotting — assume tidy data, so reshaping messy data into this form
+is often the first real step of an analysis.
+</div>
+
+## The tidyverse and a first look {#tidyverse}
+
+Instead of loading packages one at a time, `library(tidyverse)` loads the whole family at once
+(`dplyr`, `tidyr`, `readr`, `ggplot2`, and more). Here we also load the `gapminder` dataset —
+health and income indicators by country and year — which we'll use shortly.
+
+```{r load-tidyverse, message=FALSE}
+library(tidyverse)   # Loads dplyr, tidyr, readr, ggplot2, and friends in one line
+library(dslabs)
+data("gapminder")    # Load the gapminder dataset
+head(gapminder)      # First 6 rows
+```
+
+## Reading data into R {#reading-data}
+
+`read_csv()` (from the `readr` part of the tidyverse) reads a comma-separated file into R. The
+file can live on your computer or, as here, on the web — in which case you need an internet
+connection for the chunk to run.
+
+```{r read-csv-url, message=FALSE}
+library(tidyverse)
+library(dslabs)
+# The file lives online, so this chunk needs an internet connection to run.
+filename <- "https://raw.githubusercontent.com/rafalab/dslabs/master/inst/extdata/fertility-two-countries-example.csv"
+wide_data <- read_csv(filename)   # Download and read the CSV into a tibble
+head(wide_data)                   # Note: each YEAR is its own column — this is "wide" data
+```
+
+## File paths and the working directory {#file-paths}
+
+R reads and writes files relative to a folder called the **working directory**. `getwd()`
+shows you where that currently is.
+
+```{r getwd}
+# getwd() prints your current WORKING DIRECTORY — where R looks for files by default.
+getwd()
+```
+
+To read a file that ships *inside* a package, `system.file()` finds that package's folder on
+your machine, and `file.path()` joins folder and file name together with the correct slash for
+your operating system (so your code works on Windows, Mac, and Linux alike).
+
+```{r file-paths-build}
+# system.file() locates a folder inside an installed package on YOUR computer.
+path <- system.file("extdata", package = "dslabs")   # dslabs' example-data folder
+path
+filename <- "murders.csv"                 # Just the file's name
+fullpath <- file.path(path, filename)     # Join folder + file into one full path
+fullpath
+```
+
+## `pivot_longer()`: from wide to tidy {#pivot-longer}
+
+The `wide_data` above has one column per year — convenient for a spreadsheet, but not tidy.
+`pivot_longer()` **stacks** those many columns into just two: one holding the old column names
+(the years) and one holding the values (fertility). This turns wide data into long/tidy data.
+
+```{r pivot-longer-1}
+# pivot_longer() gathers many columns into two (a name column + a value column).
+# Here the year columns `1960` through `2015` become rows.
+new_tidy_data <- wide_data %>%
+  pivot_longer(`1960`:`2015`, names_to = "year", values_to = "fertility")
+head(new_tidy_data)
+```
+
+<div class="callout tip">
+<span class="label">Why the backticks?</span>
+Column names that start with a number (like <code>1960</code>) must be wrapped in
+back-ticks — <code>`1960`</code> — so R reads them as a name and not as the number 1960.
+</div>
+
+The same result can be written by saying which column to *keep* rather than which to *gather*.
+A minus sign means "everything except": `-country` gathers every column but `country`.
+
+```{r pivot-longer-2}
+# Same result, said differently: gather ALL columns EXCEPT country.
+new_tidy_data <- wide_data %>%
+  pivot_longer(-country, names_to = "year", values_to = "fertility")
+head(new_tidy_data)
+```
+
+Because the years came from column *headers*, R stored them as text. We convert `year` to
+whole numbers so we can later sort, filter, or plot by year.
+
+```{r pivot-longer-3}
+# mutate() + as.integer() converts the "year" text into whole numbers.
+new_tidy_data <- wide_data %>%
+  pivot_longer(-country, names_to = "year", values_to = "fertility") %>%
+  mutate(year = as.integer(year))
+head(new_tidy_data)
+```
+
+## `pivot_wider()`: from tidy to wide {#pivot-wider}
+
+`pivot_wider()` is the exact **opposite** of `pivot_longer()`: it spreads long data back into
+wide form, turning the values of one column into new column headers. This is handy for building
+human-readable tables for a report.
+
+```{r pivot-wider}
+# pivot_wider() spreads long data back to wide: each year becomes its own column again.
+new_wide_data <- new_tidy_data %>%
+  pivot_wider(names_from = year, values_from = fertility)
+
+new_wide_data %>% select(country, `1960`:`1967`)   # Show country + the first several years
+```
+
+## `separate()`: splitting one column into many {#separate}
+
+Sometimes a single column packs in **two** pieces of information — here, column names like
+`1960_fertility` combine a year *and* a measurement. `separate()` splits one column into
+several using a separator character (here, the underscore `_`).
+
+```{r separate, message=FALSE, warning=FALSE}
+# This file stores year AND measurement together in each column name (e.g. "1960_fertility").
+path     <- system.file("extdata", package = "dslabs")
+filename <- file.path(path, "life-expectancy-and-fertility-two-countries-example.csv")
+
+raw_data <- read_csv(filename)   # Read the local example file
+select(raw_data, 1:5)            # Look at the first 5 columns to see the combined names
+
+data <- raw_data %>% pivot_longer(-country)   # Gather everything except country into name/value
+head(data)
+
+# separate() splits ONE column into several, using a separator.
+data %>% separate(name, c("year", "variable_name"), "_")   # Split on the underscore
+
+data %>% separate(name, c("year", "variable_name"))        # Underscore is the DEFAULT separator too
+
+# Some names have an extra underscore (e.g. life_expectancy). extra = "merge" keeps the
+# leftover pieces together in the LAST column instead of dropping them with a warning.
+data %>% separate(name, c("year", "name"), extra = "merge")
+
+# Split, then pivot wider so each measurement becomes its own column.
+# (Naming the second piece "name" lets pivot_wider() use its defaults.)
+data %>%
+  separate(name, c("year", "name"), extra = "merge") %>%
+  pivot_wider()
+```
+
+## `unite()`: combining columns {#unite}
+
+`unite()` is the opposite of `separate()`: it **glues several columns back into one**. Below is
+an alternative route to a tidy table — split the names into three pieces (filling blanks on the
+right with `NA`), reunite two of them, spread wider, and tidy up the final column name.
+
+```{r unite}
+# Split into THREE named pieces; fill = "right" puts NA where a piece is missing.
+var_names <- c("year", "first_variable_name", "second_variable_name")
+data %>% separate(name, var_names, fill = "right")
+
+# unite() glues columns back together into a single column.
+data %>% separate(name, var_names, fill = "right") %>%
+  unite(name, first_variable_name, second_variable_name)   # Recombine the two name pieces
+
+# Then reshape wider so each variable becomes its own column...
+data %>% separate(name, var_names, fill = "right") %>%
+  unite(name, first_variable_name, second_variable_name) %>%
+  pivot_wider()
+
+# ...and finally rename the awkward "fertility_NA" column to just "fertility".
+data %>% separate(name, var_names, fill = "right") %>%
+  unite(name, first_variable_name, second_variable_name) %>%
+  pivot_wider() %>%
+  rename(fertility = fertility_NA)
+```
+
+# Self-Assessment Questions {#self-assessment}
+
+Try each question **before** revealing the answer. They build from foundational to
+challenging and use the same packages and datasets as above (`murders`, `gapminder`). Click
+**"Show answer"** to check your work.
+
+## Beginner {#beginner}
+
+**Q1.** Use `mutate()` to add a column called `pop_millions` to `murders`, equal to the
+population divided by one million.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+murders %>% mutate(pop_millions = population / 1000000)
+```
+
+</details>
+
+**Q2.** Use `filter()` to keep only the states in the `"West"` region.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+murders %>% filter(region == "West")   # Note the DOUBLE equals for "is equal to"
+```
+
+</details>
+
+**Q3.** Use `select()` to keep only the `state` and `murder_rate` columns.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+murders %>% select(state, murder_rate)
+```
+
+</details>
+
+## Intermediate {#intermediate}
+
+**Q4.** Rewrite this nested command using the pipe: `head(filter(murders, murder_rate < 1))`.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+murders %>%
+  filter(murder_rate < 1) %>%
+  head()
+```
+
+Read it as: take `murders`, **then** keep low-rate rows, **then** show the first six.
+
+</details>
+
+**Q5.** Find the **median** `murder_rate` for each `region`.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+murders %>%
+  group_by(region) %>%
+  summarize(median_rate = median(murder_rate))
+```
+
+</details>
+
+**Q6.** Sort the states from **highest** to **lowest** `murder_rate` and show the top six.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+murders %>%
+  arrange(desc(murder_rate)) %>%
+  head()
+```
+
+`desc()` is what flips the sort from ascending to descending.
+
+</details>
+
+## Advanced {#advanced}
+
+**Q7.** `wide_data` has one column per year. Convert it to tidy (long) form with a `year`
+column and a `fertility` column, gathering every column except `country`.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+wide_data %>%
+  pivot_longer(-country, names_to = "year", values_to = "fertility")
+```
+
+</details>
+
+**Q8.** In your own words, what does "tidy data" mean, and does `pivot_longer()` or
+`pivot_wider()` usually move you *toward* it?
+
+<details>
+<summary>Show answer</summary>
+
+Tidy data means each **variable** is a column, each **observation** is a row, and each
+**value** is a single cell. When years (or other variable values) are spread across many
+column headers, `pivot_longer()` gathers them into rows and moves you toward tidy form.
+`pivot_wider()` does the reverse — useful mainly for building readable summary tables.
+
+</details>
+
+**Q9.** Using `gapminder`, compute the **mean `life_expectancy` per continent for the year
+2010**. (Hint: `filter()`, then `group_by()`, then `summarize()` — and handle missing values.)
+
+<details>
+<summary>Show answer</summary>
+
+```r
+gapminder %>%
+  filter(year == 2010) %>%                 # Keep only year-2010 rows
+  group_by(continent) %>%                  # One group per continent
+  summarize(mean_le = mean(life_expectancy, na.rm = TRUE))   # Skip NAs
+```
+
+`na.rm = TRUE` tells `mean()` to ignore missing values; without it, any `NA` would make the
+whole result `NA`.
+
+</details>
+
+# Frequently Asked Questions (FAQ) {#faq}
+
+**What exactly is the pipe (`%>%`)?**
+It takes the result on its left and feeds it as the first argument to the function on its
+right. Read it as the word "then." So `murders %>% filter(...) %>% summarize(...)` reads
+"take murders, then filter, then summarize." It lets you write steps in the order you'd say
+them, instead of nesting functions inside-out.
+
+**I've also seen `|>` — is that the same as `%>%`?**
+Almost. `|>` is R's newer built-in ("native") pipe and `%>%` comes from the tidyverse. For
+everyday wrangling they behave the same way, so use whichever your course prefers. This
+tutorial uses `%>%` throughout.
+
+**When do I use `=` versus `==`?**
+Use `==` to *test* whether two things are equal (e.g. `region == "West"` inside `filter()`).
+Use `=` to set a function's argument (e.g. `names_to = "year"`). Mixing them up is one of the
+most common early errors.
+
+**Why do some column names have backticks, like `` `1960` ``?**
+R needs backticks around any name that isn't a plain word — names that start with a number
+(`` `1960` ``) or contain spaces. The backticks tell R "this whole thing is one column name."
+
+**What's the difference between `dplyr`, `tidyr`, and the `tidyverse`?**
+`dplyr` transforms data (mutate/filter/select/summarize/…); `tidyr` reshapes it
+(pivot/separate/unite). The `tidyverse` is a bundle that loads both of those *plus* others
+(like `readr` for reading files and `ggplot2` for plots) in a single `library(tidyverse)`
+call. You don't need to load `dplyr` separately if you've loaded the tidyverse.
+
+**Do I have to reload the libraries in every chunk?**
+No. You only need `library(...)` **once per R session** (per knit). Loading it again does no
+harm, which is why you'll sometimes see it repeated, but a single load near the top is enough.
+
+**`mutate()` vs `summarize()` — how do I remember which is which?**
+`mutate()` **keeps every row** and adds a column. `summarize()` **collapses** the rows into a
+smaller summary (one row, or one row per group after `group_by()`). If you want a value for
+every observation, mutate; if you want a total/average/median, summarize.
+
+**Why did `read_csv()` from a web link fail for me?**
+Reading a file from a URL needs an internet connection at knit time. If you're offline (or
+behind a firewall that blocks the site), download the file first and read it from a local path
+instead.
+
+**My `group_by()` line seems to do nothing.**
+That's expected — `group_by()` only tags rows with their group. You won't see the effect until
+the next verb (usually `summarize()`) runs once per group. Also remember to `ungroup()` if you
+later want to operate on the whole table again.
+
+**Where can I learn more?**
+The tidyverse documentation at <https://www.tidyverse.org> and the RStudio
+[data-wrangling cheatsheets](https://rstudio.github.io/cheatsheets/) are excellent one-page
+references to keep beside you while you work.
+
+<div class="callout keyidea">
+<span class="label">You've got the toolkit</span>
+With <code>mutate</code>, <code>filter</code>, <code>select</code>, <code>summarize</code>,
+<code>group_by</code>, <code>arrange</code>, <code>slice</code>, and the reshaping verbs
+<code>pivot_longer</code>, <code>pivot_wider</code>, <code>separate</code>, and
+<code>unite</code>, you can handle the large majority of everyday data-wrangling tasks in
+public health. Keep this file as a reference and reach for it often.
+</div>

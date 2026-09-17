@@ -1,0 +1,510 @@
+---
+title: "BST 219: Core Principles of Data Science"
+subtitle: "Data Wrangling II"
+output:
+  html_document:
+    css: crimson.css
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 2
+    number_sections: true
+    df_print: paged
+    code_folding: show
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+# This "setup" chunk runs first and stays hidden (include=FALSE). It sets options
+# that apply to every chunk so the whole document looks consistent.
+knitr::opts_chunk$set(
+  echo    = TRUE,     # Show the R code in the final document
+  message = FALSE,    # Hide package/join messages (keeps output tidy)
+  warning = FALSE,    # Hide warnings (keeps output tidy)
+  comment = "#>"      # Prefix printed output with "#>"
+)
+```
+
+# Introduction {#introduction}
+
+Real analyses almost never live in a single table. You'll merge case counts with population
+figures, demographics with outcomes, or survey responses with the dates they were collected.
+And **time itself** — when a case was reported, how long between exposure and diagnosis — is
+central to public health. This week builds two essential wrangling skills: **combining** data
+frames, and **working with dates and times**.
+
+Upon successful completion of this week, you should be able to:
+
+1. Combine data frames through joins and binding operations.
+2. Parse and manipulate dates and times with the `lubridate` package.
+
+**What you'll learn:** the six `dplyr` **join** types (`left_join`, `right_join`, `inner_join`,
+`full_join`, `semi_join`, `anti_join`), how to **bind** rows and columns, the **set operations**
+(`intersect`, `union`, `setdiff`, `setequal`), and how to read and pick apart dates with
+`lubridate`.
+
+<div class="callout tip">
+<span class="label">How to use this document</span>
+Read the short explanation, run the code chunk, then compare the output to what the explanation
+predicted. Every line of code is commented. The join examples especially reward experimenting —
+change which rows are in each small table and watch how the result changes. (Keep
+<code>crimson.css</code> in the same folder when you knit.)
+</div>
+
+# Setup {#setup}
+
+We'll use `dslabs` datasets throughout. Load the packages and data once, here at the top:
+
+```{r load-packages}
+library(tidyverse)   # dplyr (joins, binds, set ops), plus the rest of the tidyverse
+library(dslabs)      # Practice datasets
+library(lubridate)   # Tools for dates and times
+
+data(murders)                    # U.S. gun murders by state
+data(polls_us_election_2016)     # Also loads results_us_election_2016 (state-level results)
+
+head(murders)
+head(results_us_election_2016)
+```
+
+# Combining Data Frames: Joins {#joins}
+
+A **join** combines two tables by matching rows on a shared column (a "key"). The six join
+types differ in *which rows they keep*. We'll start with a real example, then use two tiny
+tables so the differences are easy to see.
+
+## Two small tables to experiment with {#join-tables}
+
+The differences between join types are clearest on small tables that *don't* perfectly
+overlap. We build one table of six states with their populations, and another of six states
+with their electoral votes — the two sets of states only partly match.
+
+```{r join-tables}
+# tab1: six states and their populations
+tab1 <- slice(murders, 1:6) %>%
+        select(state, population)
+tab1
+
+# tab2: a different set of six states and their electoral votes
+tab2 <- slice(results_us_election_2016, c(1:3, 5, 14, 44)) %>%
+        select(state, electoral_votes)
+tab2
+```
+
+## `left_join()` {#left-join}
+
+`left_join()` keeps **every row of the left (first) table** and adds matching columns from the
+right table, filling in `NA` where the right table has no match. Here we join the two small tables, matching on the `state` column that both tables share.
+
+```{r left-join}
+left_join(tab1, tab2, by = "state")   # Keep all of tab1; add electoral_votes; NA where no match
+
+tab1 %>% left_join(tab2)              # Same result; dplyr auto-detects the shared "state" column
+```
+
+<div class="callout tip">
+<span class="label">The "Joining by" message</span>
+If you omit <code>by = ...</code>, dplyr figures out the shared column(s) for you and prints a
+message telling you which it used (hidden here to keep the output clean). It's good practice to
+state <code>by</code> explicitly so your intent is clear.
+</div>
+
+## `right_join()` {#right-join}
+
+`right_join()` is the mirror image: it keeps **every row of the right table** instead.
+
+```{r right-join}
+tab1 %>% right_join(tab2)   # Keep all of tab2; NA where tab1 has no match
+```
+
+## `inner_join()` {#inner-join}
+
+`inner_join()` keeps **only rows that appear in both** tables — the intersection of the keys.
+
+```{r inner-join}
+inner_join(tab1, tab2)   # Keep only states found in BOTH tables
+```
+
+## `full_join()` {#full-join}
+
+`full_join()` keeps **every row from both** tables, filling `NA` wherever a side is missing.
+
+```{r full-join}
+full_join(tab1, tab2)   # Keep all states from EITHER table
+```
+
+## `semi_join()` {#semi-join}
+
+`semi_join()` is a **filtering join**: it keeps the rows of the left table that *have* a match
+in the right table, but it does **not** add any of the right table's columns.
+
+```{r semi-join}
+semi_join(tab1, tab2)   # Keep tab1 rows that have a match in tab2 (columns unchanged)
+```
+
+## `anti_join()` {#anti-join}
+
+`anti_join()` is the other filtering join: it keeps the left-table rows that have **no** match
+in the right table — useful for finding what's *missing*.
+
+```{r anti-join}
+anti_join(tab1, tab2)   # Keep tab1 rows that have NO match in tab2
+```
+
+<div class="callout keyidea">
+<span class="label">Key idea</span>
+<strong>Mutating joins</strong> (<code>left</code>, <code>right</code>, <code>inner</code>,
+<code>full</code>) combine columns from both tables. <strong>Filtering joins</strong>
+(<code>semi</code>, <code>anti</code>) use the second table only to decide which rows of the
+first table to <em>keep</em> — they never add its columns.
+</div>
+
+# Binding Data Frames {#binding}
+
+Joins match rows by a key. **Binding** is simpler: it just glues tables together by position,
+assuming they already line up.
+
+## `bind_cols()`: adding columns {#bind-cols}
+
+`bind_cols()` places tables **side by side**, matching them row-by-row by position.
+
+```{r bind-cols}
+# Here tab1 and tab2 are two halves of the SAME rows, split by column.
+tab1 <- murders[, 1:2]              # The first two columns
+tab2 <- murders[, 3:4]              # The next two columns
+new_tab <- bind_cols(tab1, tab2)    # Glue them back together, column-wise
+head(new_tab)
+```
+
+<div class="callout tip">
+<span class="label">Prefer a join when there's a key</span>
+<code>bind_cols()</code> trusts that the rows are already in the same order — if they aren't,
+you'll silently pair up the wrong records. When the tables share an identifier, a join is
+safer because it matches on the key rather than on position.
+</div>
+
+## `bind_rows()`: stacking rows {#bind-rows}
+
+`bind_rows()` stacks tables **on top of each other**, matching them up by column name.
+
+```{r bind-rows}
+# Now tab1 and tab2 are two different sets of ROWS with the same columns.
+tab1 <- murders[1:2, ]      # The first two rows
+tab2 <- murders[3:4, ]      # The next two rows
+bind_rows(tab1, tab2)       # Stack them into one table
+```
+
+# Set Operations {#set-operations}
+
+Set operations treat each table's **rows** (or each vector's **elements**) as a set, and
+compare two sets. Each example below shows the idea on plain vectors first, then on data
+frames. We'll reuse two overlapping slices of `murders`:
+
+```{r setops-tables}
+# Two slices that overlap in rows 3, 4, and 5:
+tab1 <- murders[1:5, ]   # Rows 1–5
+tab2 <- murders[3:7, ]   # Rows 3–7
+```
+
+## `intersect()` {#intersect}
+
+`intersect()` returns the elements (or rows) present in **both** sets.
+
+```{r intersect}
+intersect(1:10, 6:15)                       # Numbers in both -> 6, 7, 8, 9, 10
+intersect(c("a", "b", "c"), c("b", "c", "d")) # Shared letters -> "b", "c"
+
+intersect(tab1, tab2)                       # Rows present in BOTH tab1 and tab2 (rows 3–5)
+```
+
+## `union()` {#union}
+
+`union()` returns all **distinct** elements (or rows) found in **either** set.
+
+```{r union}
+union(1:10, 6:15)                       # All numbers, no duplicates -> 1..15
+union(c("a", "b", "c"), c("b", "c", "d")) # -> "a", "b", "c", "d"
+
+union(tab1, tab2)                       # All distinct rows across both tables
+```
+
+## `setdiff()` {#setdiff}
+
+`setdiff()` returns what's in the **first** set but **not** the second. Order matters here.
+
+```{r setdiff}
+setdiff(1:10, 6:15)   # In 1:10 but not 6:15 -> 1, 2, 3, 4, 5
+setdiff(6:15, 1:10)   # Reversed -> 11, 12, 13, 14, 15
+
+setdiff(tab1, tab2)   # Rows in tab1 but not tab2 (rows 1–2)
+```
+
+## `setequal()` {#setequal}
+
+`setequal()` asks whether two sets contain **exactly the same** elements, ignoring order.
+
+```{r setequal}
+setequal(1:5, 1:6)     # FALSE — different elements
+setequal(1:5, 5:1)     # TRUE  — same elements, order doesn't matter
+setequal(tab1, tab2)   # FALSE — different rows
+```
+
+# Dates and Times with `lubridate` {#dates}
+
+Dates are deceptively tricky: they come in dozens of text formats and need real calendar logic
+to manipulate. The `lubridate` package makes reading and dissecting them straightforward.
+
+## Dates as a data type {#date-type}
+
+R has a dedicated `Date` type. Underneath, a date is stored as a **number** — the count of days
+since January 1, 1970 — which is what lets R do arithmetic with dates.
+
+```{r date-type}
+head(polls_us_election_2016$startdate)    # These look like dates...
+class(polls_us_election_2016$startdate)   # ...and R confirms they are "Date" objects
+
+as.numeric(polls_us_election_2016$startdate) %>% head()   # Under the hood: days since 1970-01-01
+```
+
+## Extracting components of a date {#date-components}
+
+First we grab 10 random dates to work with. `set.seed()` makes the random draw reproducible, so
+you get the same 10 dates every time you knit.
+
+```{r sample-dates}
+set.seed(2)   # Fix the random seed for reproducibility
+dates <- sample(polls_us_election_2016$startdate, 10) %>% sort()   # 10 random dates, sorted
+dates
+```
+
+The functions `month()`, `day()`, and `year()` pull out each piece of a date.
+
+```{r date-parts}
+# Build a small table with each date broken into its parts.
+data.frame(month = month(dates),
+           day   = day(dates),
+           year  = year(dates))
+```
+
+Add `label = TRUE` to get the month's **name** instead of its number.
+
+```{r month-label}
+month(dates, label = TRUE)   # e.g. "Nov" instead of 11
+```
+
+## Parsing dates from messy text {#parsing}
+
+The real power of `lubridate` is turning **text** into proper dates. The `ymd()` function reads
+**y**ear-**m**onth-**d**ay order and is remarkably forgiving about inconsistent formatting.
+
+```{r ymd-parse}
+# All of these get parsed to the same tidy YYYY-MM-DD dates, despite the mess.
+x <- c(20090101, "2009-01-02", "2009 01 03", "2009-1-4",
+       "2009-1, 5", "Created on 2009 1 6", "200901 !!! 07")
+ymd(x)
+```
+
+The same digits mean different dates depending on the order you assume. `lubridate` gives you a
+function for each order — pick the one that matches your data. **All dates MUST be in the same order for any of these functions to work properly**.
+
+```{r parse-variants}
+x <- "09/01/02"
+ymd(x)   # year-month-day
+ydm(x)   # year-day-month
+myd(x)   # month-year-day
+mdy(x)   # month-day-year
+dmy(x)   # day-month-year
+dym(x)   # day-year-month
+```
+
+## Working with times {#times}
+
+`lubridate` handles times and full time stamps too.
+
+```{r times}
+now()              # Current date-time in your local time zone
+now("GMT")         # ...or in a specified time zone
+
+now() %>% hour()   # Pull out just the hour
+now() %>% minute() # ...the minute
+now() %>% second() # ...the second
+
+x <- "12:34:56"
+hms(x)             # Parse an hours:minutes:seconds string
+
+x <- "Nov/2/2012 12:34:56"
+mdy_hms(x)         # Parse a combined date-and-time string (month-day-year, then h:m:s)
+```
+
+# Self-Assessment Questions {#self-assessment}
+
+Try each question **before** revealing the answer. They build from foundational to challenging
+and use the packages and data loaded above. Click **"Show answer"** to check your work.
+
+## Beginner {#beginner}
+
+**Q1.** Which join keeps **every row of the left table**, filling in `NA` where the right table
+has no match?
+
+<details>
+<summary>Show answer</summary>
+
+`left_join()`. (`right_join()` does the same but keeps every row of the *right* table.)
+
+</details>
+
+**Q2.** Use a `lubridate` function to turn the text `"2021-03-15"` into a proper date.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+ymd("2021-03-15")   # year-month-day order
+```
+
+</details>
+
+**Q3.** Which function stacks two data frames on top of each other (adding rows), matching by
+column name?
+
+<details>
+<summary>Show answer</summary>
+
+`bind_rows()`. (`bind_cols()` glues tables side-by-side instead, adding columns.)
+
+</details>
+
+## Intermediate {#intermediate}
+
+**Q4.** In one sentence each, explain the difference between `inner_join()` and `full_join()`.
+
+<details>
+<summary>Show answer</summary>
+
+`inner_join()` keeps only the rows whose key appears in **both** tables. `full_join()` keeps
+**every** row from **both** tables, filling `NA` wherever one side has no match.
+
+</details>
+
+**Q5.** Given a vector of dates `d`, extract the month as a **name** (like "Mar") rather than a
+number.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+month(d, label = TRUE)
+```
+
+</details>
+
+**Q6.** You have `tab1` and `tab2`. Which single join returns the rows of `tab1` that have **no**
+match in `tab2`?
+
+<details>
+<summary>Show answer</summary>
+
+```r
+anti_join(tab1, tab2)
+```
+
+An `anti_join` is a filtering join — it keeps rows of the first table with no match in the
+second, and adds no new columns.
+
+</details>
+
+## Advanced {#advanced}
+
+**Q7.** Explain the difference between a **mutating join** and a **filtering join**, and give an
+example of each.
+
+<details>
+<summary>Show answer</summary>
+
+A **mutating join** (`left_join`, `right_join`, `inner_join`, `full_join`) combines the two
+tables' **columns**, adding the right table's variables to the left. A **filtering join**
+(`semi_join`, `anti_join`) uses the second table only to decide which **rows** of the first
+table to keep — it never adds columns. Example: `left_join` adds election columns to the murders
+table; `semi_join` just keeps the murders rows that have a matching election record.
+
+</details>
+
+**Q8.** You have a vector of date strings written as month/day/year, e.g., `"11/02/2012"`. Which
+`lubridate` function parses them correctly?
+
+<details>
+<summary>Show answer</summary>
+
+```r
+mdy("11/02/2012")   # month-day-year order
+```
+
+Choosing `ymd()` or `dmy()` here would misread the pieces — always match the function to the
+order your data is actually in.
+
+</details>
+
+**Q9.** Using a set operation, return only the rows that two data frames `tab1` and `tab2` have
+in common.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+intersect(tab1, tab2)
+```
+
+`intersect()` returns the rows present in both tables; `union()` would return all distinct rows,
+and `setdiff()` those in one but not the other.
+
+</details>
+
+# Frequently Asked Questions (FAQ) {#faq}
+
+**How do I remember the difference between `left`, `right`, `inner`, and `full` joins?**
+They differ only in which rows they keep. `left` keeps all rows of the first table; `right`
+keeps all of the second; `inner` keeps only rows matched in both; `full` keeps everything from
+both. In all four, the matched columns from both tables are combined.
+
+**What are `semi_join` and `anti_join` for?**
+They *filter* rather than combine. `semi_join` keeps the first table's rows that **have** a match
+in the second; `anti_join` keeps the rows that **don't**. Neither adds the second table's
+columns — they're for questions like "which of my records are missing from this other list?"
+
+**What if the key columns have different names in the two tables?**
+Tell the join how they line up with a named vector, e.g. `by = c("state" = "state_name")`. The
+left name is the column in the first table, the right name the column in the second.
+
+**Why did my join print a "Joining with `by = ...`" message?**
+When you don't specify `by`, dplyr auto-detects the columns the two tables share and reports
+which it used. It's harmless, but stating `by` explicitly makes your intent clear and avoids
+surprises if the tables share more than one column.
+
+**When should I use `bind_cols` instead of a join?**
+Rarely. `bind_cols` pairs rows purely by position and trusts they're already aligned; if they
+aren't, you'll silently mismatch records. Whenever the tables share an identifier, use a join so
+rows are matched by key, not by luck of ordering.
+
+**Why is my date column being treated as text (or a number)?**
+Dates read from a file often come in as character strings. Parse them into real dates with the
+`lubridate` function whose letters match your format — `ymd()`, `mdy()`, `dmy()`, and so on —
+after which sorting, plotting, and date arithmetic all work correctly.
+
+**How do I choose between `ymd()`, `mdy()`, and `dmy()`?**
+Match the function name to the order the pieces appear in your data: `"2021-03-15"` is
+year-month-day → `ymd()`; `"03/15/2021"` is month-day-year → `mdy()`; `"15/03/2021"` is
+day-month-year → `dmy()`.
+
+**Why do I `set.seed()` before `sample()`?**
+`sample()` draws at random, so it gives different results each run. `set.seed()` fixes the
+random number generator so the "random" draw is the same every time you knit — essential for a
+reproducible document.
+
+<div class="callout keyidea">
+<span class="label">You've leveled up</span>
+You can now bring separate tables together the right way — matching on a key with joins, or
+stacking with binds — compare them with set operations, and turn messy date text into dates you
+can compute with. These are the everyday moves of real data work; keep this file handy as a
+reference.
+</div>
