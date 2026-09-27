@@ -1,0 +1,888 @@
+---
+title: "Introduction to ggplot2"
+subtitle: "Week 5 — Introduction to Data Visualization"
+output:
+  html_document:
+    css: crimson.css
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 2
+    number_sections: true
+    df_print: paged
+    code_folding: show
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+# This "setup" chunk runs first and stays hidden (include=FALSE). It sets options
+# that apply to every chunk so the whole document looks consistent.
+knitr::opts_chunk$set(
+  echo    = TRUE,     # Show the R code in the final document
+  message = FALSE,    # Hide package start-up messages (keeps output tidy)
+  warning = FALSE,    # Hide warnings (keeps output tidy)
+  comment = "#>"      # Prefix printed output with "#>"
+)
+```
+
+# Introduction {#introduction}
+
+This week you'll learn how to make clear and effective data visualizations in R with `ggplot2`.
+
+**Core idea**: `ggplot2` is built on the *grammar of graphics* → plots are constructed by combining data, aesthetics (`aes()`), and geometric layers (`geom_*`).
+
+**Core functions**:
+
+* `ggplot(data, aes(x, y))` – initialize a plot with data and mappings
+* `geom_point()`, `geom_bar()`, `geom_boxplot()` – common plot types
+* `labs(title = , x = , y = )` – add labels
+* `theme_minimal()`, `theme_bw()` – adjust themes
+* `scale_x_*()`, `scale_y_*()`, `scale_color_*()` – fine-tune scales and colors
+
+**Main points**:
+
+1. Start with data + aesthetics + geom to build any plot.
+2. Add layers to customize appearance and improve clarity.
+3. Always design visualizations with readability and reproducibility in mind.
+
+<div class="callout tip">
+<span class="label">Packages used in this lesson</span>
+Core: `tidyverse` (which includes `ggplot2`) and `dslabs` (datasets). Add-ons for the finishing
+touches: `ggthemes`, `ggrepel`, `gridExtra`, `RColorBrewer`, and `scales`. Install any you don't
+have with `install.packages("...")`, and keep `crimson.css` in the same folder when you knit.
+</div>
+
+# Data Visualization and Exploratory Data Analysis {#eda}
+
+Looking at the numbers and character strings that define a dataset is rarely useful. To convince yourself, print and stare at this data table:
+
+```{r load-murders}
+library(tidyverse)   # Loads ggplot2 (plotting) and dplyr (wrangling)
+library(dslabs)      # Practice datasets
+data(murders)        # U.S. gun murders by state (2010)
+head(murders)        # Print the first 6 rows
+```
+
+What do you learn from staring at this table? How quickly can you determine which states have the largest populations? Which states have the smallest? How large is a typical state? Is there a relationship between population size and total murders? How do murder rates vary across regions of the country?  For most human brains it is quite difficult to extract this information just from looking at the numbers. In contrast, the answer to all the questions above are readily available from examining this plot:
+
+```{r hook-plot}
+library(ggthemes)   # Extra plot themes (e.g. theme_economist)
+library(ggrepel)    # Labels that don't overlap (geom_text_repel)
+
+# Compute the national murder rate per MILLION, to draw an "average" reference line.
+r <- murders %>%
+  summarize(pop = sum(population), tot = sum(total)) %>%   # National totals
+  mutate(murder_rate = tot / pop * 10^6) %>%               # Rate per million
+  .$murder_rate                                            # Pull out the single value
+
+murders %>% ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_abline(intercept = log10(r), lty = 2, col = "darkgrey") +  # US-average reference line
+  geom_point(aes(color = region), size = 3) +                     # One point per state, colored by region
+  geom_text_repel() +                                             # State abbreviations, non-overlapping
+  scale_x_log10() +                                               # Log scale spreads out small states
+  scale_y_log10() +
+  xlab("Populations in millions (log scale)") +
+  ylab("Total number of murders (log scale)") +
+  ggtitle("US Gun Murders in 2010") +
+  scale_color_discrete(name = "Region") +
+  theme_economist()                                               # The Economist magazine style
+```
+
+We are reminded of the saying, "a picture is worth a thousand words". Data visualization provides a powerful way to communicate a data-driven finding. In some cases, the visualization is so convincing that no follow-up analysis is required. We also note that many widely used data analysis tools  were initiated by discoveries made via exploratory data analysis (EDA). EDA is perhaps the most important part of data analysis, yet is often overlooked.
+
+With the talks [New Insights on Poverty](https://www.ted.com/talks/hans_rosling_reveals_new_insights_on_poverty?language=en) and [The Best Stats You've Ever Seen](https://www.ted.com/talks/hans_rosling_shows_the_best_stats_you_ve_ever_seen), Hans Rosling forced us to notice the unexpected with a series of plots related to world health and economics. In his videos, he used animated graphs to show us how the world was changing and that old narratives are no longer true. We will use this data as an example to learn about `ggplot2` and data visualization.
+
+It is also important to note that mistakes, biases, systematic errors and other unexpected problems often lead to data that should be handled with care. Failure to discover these problems often leads to flawed analyses and false discoveries. As an example, consider that measurement devices sometimes fail and that most data analysis procedures are not designed to detect these.
+
+Yet, these data analysis procedures will still give you an answer. The fact that it can be hard or impossible to notice an error just from the reported results, makes data visualization particularly important.
+
+This week and next we will learn the basics of the `ggplot2` package - the software we will use to learn the basics of data visualization and exploratory data analysis. We will use motivating examples and start by reproducing the murders by state example to learn the basics of `ggplot2`. Then we will cover world health and economics and infectious disease trends in the United States.
+
+Note that there is much more to data visualization than what we cover here. More references include:
+
+- ER Tufte (1983) The visual display of quantitative information. Graphics Press.
+- ER Tufte (1990) Envisioning information. Graphics Press.
+- ER Tufte (1997) Visual explanations. Graphics Press.
+- A Gelman, C Pasarica, R Dodhia (2002) Let's practice what we preach: Turning tables into graphs. The American Statistician 56:121-130
+- NB Robbins (2004) Creating more effective graphs. Wiley
+- Cole Nussbaumer Knaflic (2015) [Storytelling with Data](https://www.storytellingwithdata.com/books)
+- Rob Kabacoff (2018) [Data Visualization with R](https://rkabacoff.github.io/datavis/)
+- [R Shiny](https://shiny.rstudio.com/)
+
+# A first introduction to `ggplot2` {#first-ggplot}
+
+We will be using the [`ggplot2`](https://ggplot2.tidyverse.org/) package, which loads as part of the tidyverse.
+
+One reason `ggplot2` is generally more intuitive for beginners is that it uses a _grammar of graphics_, the _gg_ in `ggplot2`. This is analogous to the way learning grammar can help a beginner construct hundreds of different sentences by learning just a handful of verbs, nouns and adjectives without having to memorize each specific sentence. Similarly, by learning a handful of `ggplot2` building blocks and its grammar, you will be able to create hundreds of different plots.
+
+Another reason `ggplot2` makes it easier for beginners is that its default behavior is carefully chosen to satisfy the great majority of cases and are aesthetically pleasing. As a result, it is possible to create informative and elegant graphs with relatively simple and readable code.
+
+One limitation is that ggplot is designed to work exclusively with data tables in which rows are observations and columns are variables. However, a substantial percentage of datasets that beginners work with are, or can be converted into, this format. An advantage of this approach is that assuming that our data follows this format simplifies the code and learning the grammar.
+
+## The Cheat Sheet {#cheat-sheet}
+
+To use `ggplot2` you will have to learn several functions and arguments. These are hard to memorize so we highly recommend you have the [ggplot2 cheat sheet](https://www.rstudio.com/resources/cheatsheets/) handy.
+
+## The components of a graph {#components}
+
+We construct a graph that summarizes the US murders dataset. Here is the finished plot again — our target for the rest of this section:
+
+```{r ggplot-example-plot, echo=FALSE}
+# (Code hidden with echo=FALSE — this is the finished plot we'll rebuild step by step.)
+r <- murders %>%
+  summarize(pop = sum(population), tot = sum(total)) %>%
+  mutate(murder_rate = tot / pop * 10^6) %>% .$murder_rate
+
+murders %>% ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_abline(intercept = log10(r), lty = 2, col = "darkgrey") +
+  geom_point(aes(color = region), size = 3) +
+  geom_text_repel() +
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Populations in millions (log scale)") +
+  ylab("Total number of murders (log scale)") +
+  ggtitle("US Gun Murders in 2010") +
+  scale_color_discrete(name = "Region") +
+  theme_economist()
+```
+
+We can clearly see how much states vary across population size and the total number of murders. Not surprisingly, we also see a clear relationship between murder totals and population size. A state falling on the dashed grey line has the same murder rate as the US average. The four geographic regions are denoted with color and depicts how most southern states have murder rates above the average.
+
+This data visualization shows us pretty much all the information in the data table. The code needed to make this plot is relatively simple. We will learn to create the plot part by part.
+
+The first step in learning `ggplot2` is to be able to break a graph apart into components. Let's break down this plot and introduce some of the `ggplot2` terminology. The three main components to note are:
+
+1. __Data__: The US murders data table is being summarized. We refer to this as the __data__ component.
+2. __Geometry__: The plot above is a scatter plot. This is referred to as the __geometry__ component. Other possible geometries are barplots, histograms, smooth densities, qqplots, and boxplots.
+3. __Aesthetic mapping__: The x-axis values are used to display population size, the y-axis values are used to display the total number of murders, text is used to identify the states, and colors are used to denote the four different regions. These are the __aesthetic mappings__ component. How we define the mapping  depends on what __geometry__ we are using.
+
+We also note that:
+
+4. The range of the x-axis and y-axis appears to be defined by the range of the data. They are both on log-scales. We refer to this as the __scale__ component.
+5. There are labels, a title, a legend, and we use the style of The Economist magazine for this particular plot.
+
+We will now construct the plot piece by piece.
+
+## Creating a blank slate `ggplot` object {#blank-slate}
+
+The first step in creating a `ggplot2` graph is to define a `ggplot` object. We do this with the function `ggplot` which initializes the graph. If we read the help file for this function we see that the first argument is used to specify which data is associated with this object:
+
+```{r blank-ggplot}
+murders %>% ggplot()   # Initialize a plot with the murders data — but no geometry yet
+```
+
+Note that it renders a plot, in this case a blank slate since no geometry has been defined. The only style choice we see is a grey background.
+
+What has happened above is that the object was created and because it was not assigned, it was automatically evaluated. But note that we can define an object, for example like this:
+
+```{r define-p}
+p <- ggplot(data = murders)   # Save the (blank) plot object into p
+class(p)                      # It's a "ggplot" object
+```
+
+To render the plot associated with this object we simply print the object `p`. The following two lines of code produce the same plot we see above:
+
+```{r print-p, eval=FALSE}
+print(p)   # Explicitly print the plot object...
+p          # ...or just type its name (same result)
+```
+
+## Layers {#layers}
+
+In ggplot we create graphs by adding _layers_. Layers can define geometries, compute summary statistics, define what scales to use, or even change styles. To add layers, we use the symbol `+`. In general a line of code will look like this:
+
+> `DATA %>% ggplot() + LAYER 1 + LAYER 2 + ... + LAYER N`
+
+Usually, the first added layer defines the geometry. We want to make a scatter plot. So what geometry do we use?
+
+### Geometry {#geometry}
+
+Taking a quick look at the cheat sheet we see that the function used to create plots with this geometry is `geom_point`.
+
+We will see that geometry function names follow this pattern: `geom` and the name of the geometry connected by an underscore. For `geom_point` to know what to do, we need to provide data and a mapping. We have already connected the object `p` with the `murders` data table and if we add as a layer `geom_point` we will default to using this data. To find out what mappings are expected we read the __Aesthetics__ section of the `geom_point` help file:
+
+> Aesthetics
+>
+> geom_point understands the following aesthetics: `x`, `y`, `alpha`, `colour`
+
+and, as expected, we see that at least two arguments are required: `x` and `y`.
+
+## `aes` {#aes}
+
+`aes` will be one of the functions that you will most use. The function connects data with what we see on the graph. We refer to this connection as the __aesthetic mappings__. The outcome of this function is often used as the argument of a geometry function. This example produces a scatter plot of total murders versus population in millions:
+
+```{r first-geom-point}
+murders %>%
+  ggplot() +
+  geom_point(aes(x = population/10^6, y = total))   # Map population to x, total to y
+```
+
+### Adding other layers {#adding-layers}
+
+A second layer in the plot we wish to make involves adding a label to each point to identify the state. The `geom_label` and `geom_text` functions permit us to add text to the plot, without and with a rectangle behind the text respectively.
+
+Because each state (each point) has a label we need an aesthetic mapping to make the connection. By reading the help file we learn that we supply the mapping between point and label through the `label` argument of `aes`.  So the code looks like this:
+
+```{r add-text}
+murders %>%
+  ggplot() +
+  geom_point(aes(population/10^6, total)) +
+  geom_text(aes(population/10^6, total, label = abb))   # NEW: add a text label per point
+```
+
+### Tinkering with other arguments {#tinkering}
+
+Note that each geometry function has many arguments other than `aes` and `data`. They tend to be specific to the function. For example, in the plot we wish to make, the points are larger than the default ones. In the help file we see that `size` is an aesthetic and we can change it like this:
+
+```{r point-size}
+murders %>%
+  ggplot() +
+  geom_point(aes(population/10^6, total), size = 3) +   # NEW: bigger points (size = 3)
+  geom_text(aes(population/10^6, total, label = abb))
+```
+
+Note that `size` is __not__ a mapping, it affects all the points so we do not need to include it inside `aes`.
+
+Now that the points are larger, it is hard to see the labels. If we read the help file for `geom_text` we learn of the `nudge_x` argument which moves the text slightly to the right:
+
+```{r nudge}
+murders %>%
+  ggplot() +
+  geom_point(aes(population/10^6, total), size = 3) +
+  geom_text(aes(population/10^6, total, label = abb), nudge_x = 3)   # NEW: shift labels right
+```
+
+This is preferred as it makes it easier to read the text.
+
+## Global aesthetic mappings {#global-aes}
+
+Note that in the previous line of code, we define the mapping `aes(population/10^6, total)` twice, once in each geometry. We can avoid this by using a _global_ aesthetic mapping. We can do this when we define the blank slate `ggplot` object.
+
+```{r global-aes}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +   # Define mappings ONCE, globally
+  geom_point(size = 3) +
+  geom_text(nudge_x = 1.5)
+```
+
+We keep the `size` and `nudge_x` argument in `geom_point` and `geom_text` respectively because we only want to increase the size of points and nudge only the labels. Also note that the `geom_point` function does not need a `label` argument and therefore ignores it.
+
+### Local aesthetic mappings override global ones {#local-aes}
+
+If we need to, we can override the global mapping by defining a new mapping within each layer. These _local_ definitions  override the _global_. Here is an example:
+
+```{r local-aes}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_point(size = 3) +
+  geom_text(aes(x = 10, y = 800, label = "Hello there!"))   # Local mapping overrides the global one
+```
+
+Clearly, the second call to `geom_text` does not use `population` and `total` on the `x` and `y` axis.
+
+## Scales {#scales}
+
+Recall that our desired scales are in log-scale. This is not the default so this change needs to be added through a _scales_ layer. A quick look at the cheat sheet reveals `scale_x_continuous` is needed to edit the behavior of scales. We use it like this:
+
+```{r scale-continuous}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_point(size = 3) +
+  geom_text(nudge_x = 0.05) +
+  scale_x_continuous(trans = "log10") +   # NEW: log-transform the x-axis
+  scale_y_continuous(trans = "log10")     # NEW: log-transform the y-axis
+```
+
+Because we are in the log-scale now, the _nudge_ must be made smaller.
+
+This particular transformation is so common that `ggplot` provides specialized functions:
+
+```{r scale-log10}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_point(size = 3) +
+  geom_text(nudge_x = 0.05) +
+  scale_x_log10() +   # Shorthand for scale_x_continuous(trans = "log10")
+  scale_y_log10()
+```
+
+## Labels and Titles {#labels-titles}
+
+Similarly, the cheat sheet quickly reveals that to change labels and add a title we use the following functions: `xlab`, `ylab` and `ggtitle`.
+
+```{r labels}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_point(size = 3) +
+  geom_text(nudge_x = 0.05) +
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Populations in millions (log scale)") +           # NEW: x-axis label
+  ylab("Total number of murders (log scale)") +           # NEW: y-axis label
+  ggtitle("US Gun Murders in 2010") +                     # NEW: title
+  theme(plot.title = element_text(hjust = 0.5))           # Center the title
+```
+
+We are almost there! All we have to do is add color, a legend and optional changes to the style.
+
+# Fine-tuning visualizations {#fine-tuning}
+
+## Categories as colors {#colors}
+
+Note that we can change the color of the points using the `color` argument in the `geom_point` function.
+
+```{r color-fixed}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_point(size = 3, color = "blue") +   # color OUTSIDE aes(): every point the same blue
+  geom_text(nudge_x = 0.05) +
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Populations in millions (log scale)") +
+  ylab("Total number of murders (log scale)") +
+  ggtitle("US Gun Murders in 2010") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+This, of course, is not what we want. We want to assign color depending on the geographical region. A nice default behavior of `ggplot2` is that if we assign a categorical variable to color, it automatically assigns a different color to each category. It also adds a legend!
+
+To map each point to a color, we need to use `aes` since this is a mapping. So we use the following code:
+
+```{r color-region}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_point(aes(color = region), size = 3) +   # color INSIDE aes(): mapped to region + legend
+  geom_text(nudge_x = 0.05) +
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Populations in millions (log scale)") +
+  ylab("Total number of murders (log scale)") +
+  ggtitle("US Gun Murders in 2010") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Here we see yet another useful default behavior: `ggplot2` has automatically added a legend that maps color to region.
+
+<div class="callout keyidea">
+<span class="label">Key idea: inside vs. outside <code>aes()</code></span>
+Put a setting <strong>inside</strong> <code>aes()</code> to <em>map it to a variable</em> (each
+value gets its own color/size, and a legend appears). Put it <strong>outside</strong>
+<code>aes()</code> to set one fixed value for <em>every</em> point. "All points blue" goes
+outside; "color by region" goes inside.
+</div>
+
+## Adding a line {#adding-line}
+
+We want to add a line that represents the average murder rate for the entire country. Note that once we determine the per million rate to be $r$, this line is defined by the formula: $y = r x$ with $y$ and $x$ our axes: total murders and population in millions respectively. In the log-scale this line turns into: $\log(y) = \log(r) + \log(x)$. So in our plot it's a line with slope 1 and intercept $\log(r)$. To compute this value we use our `dplyr` skills:
+
+```{r compute-r}
+# National murder rate per MILLION people (a single number).
+r <- murders %>%
+     summarize(murder_rate = sum(total) / sum(population) * 10^6) %>% .$murder_rate
+r
+```
+
+To add a line we use the `geom_abline` function. `ggplot` uses `ab` in the name to remind us we are supplying the intercept (`a`) and slope (`b`). The default line has slope 1 and intercept 0 so we only have to define the intercept:`intercept = log10(r)`. We can change the line type and color of the lines using arguments. We also draw it first so it doesn't go over our points.
+
+```{r add-abline}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_abline(intercept = log10(r), lty = 2, color = "darkgrey") +   # NEW: US-average line, drawn first
+  geom_point(aes(color = region), size = 3) +
+  geom_text(nudge_x = 0.05) +
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Populations in millions (log scale)") +
+  ylab("Total number of murders (log scale)") +
+  ggtitle("US Gun Murders in 2010") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Other adjustments {#other-adjustments}
+
+The default plots created by `ggplot` are already very useful. But often, we need to make minor tweaks to the default behavior. Although it is not always obvious how to make these even with the cheat sheet, `ggplot2` is very flexible.
+
+For example, note that we can make changes to the legend via the `scale_color_discrete` function. For example, in our plot the word _region_ is not capitalized. We can change that like this:
+
+```{r legend-name}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_abline(intercept = log10(r), lty = 2, color = "darkgrey") +
+  geom_point(aes(color = region), size = 3) +
+  geom_text(nudge_x = 0.05) +
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Populations in millions (log scale)") +
+  ylab("Total number of murders (log scale)") +
+  ggtitle("US Gun Murders in 2010") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_discrete(name = "Region")   # NEW: capitalize the legend title
+```
+
+## Add-on packages {#add-ons}
+
+The power of `ggplot2` is augmented further due to the availability of add-on packages. The remaining changes required to put the finishing touches on our plot require the `ggthemes` and `ggrepel` packages.
+
+The style of a `ggplot` graph can be changed using the `theme` functions. Several themes are included as part of the `ggplot2` package. In fact, for most of the plots in this course we use a function in the `dslabs` package that automatically sets a default theme:
+
+```{r ds-theme}
+ds_theme_set()   # Set the dslabs default theme
+```
+
+Many other themes are added by the package `ggthemes`. Among those are the `theme_economist` theme that we will use here. After loading the package, you can change the style of the plot by adding the layer `theme_economist()`.
+
+```{r full-economist}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_abline(intercept = log10(r), lty = 2, color = "darkgrey") +
+  geom_point(aes(color = region), size = 3) +
+  geom_text(nudge_x = 0.05) +
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Populations in millions (log scale)") +
+  ylab("Total number of murders (log scale)") +
+  ggtitle("US Gun Murders in 2010") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_discrete(name = "Region") +
+  theme_economist()   # NEW: apply the Economist style
+```
+
+You can see how some of the other themes look like by simply changing the function. For example you might try the `theme_fivethirtyeight()` theme instead.
+
+The final difference has to do with the position of the labels. Note that in our plot, some of the labels fall on top of each other. The add-on package `ggrepel` includes a geometry that adds labels ensuring that they don't fall on top of each other. We simply change `geom_text` with `geom_text_repel`.
+
+```{r repel}
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_abline(intercept = log10(r), lty = 2, color = "darkgrey") +
+  geom_point(aes(color = region), size = 3) +
+  geom_text_repel() +   # NEW: labels that repel each other so they don't overlap
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Populations in millions (log scale)") +
+  ylab("Total number of murders (log scale)") +
+  ggtitle("US Gun Murders in 2010") +
+  scale_color_discrete(name = "Region") +
+  theme_economist()
+```
+
+## Putting it all together {#all-together}
+
+So now that we are done testing we can write one piece of code that produces our desired plot from scratch.
+
+```{r final-plot}
+library(tidyverse)
+library(dslabs)
+library(ggthemes)
+library(ggrepel)
+
+## Load the data
+data(murders)
+
+## First define the slope of the line
+r <- murders %>%
+     summarize(murder_rate = sum(total) / sum(population) * 10^6) %>% .$murder_rate
+
+## Now make the plot
+murders %>%
+  ggplot(aes(x = population/10^6, y = total, label = abb)) +
+  geom_abline(intercept = log10(r), lty = 2, color = "darkgrey") +
+  geom_point(aes(color = region), size = 3) +
+  geom_text_repel() +
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Populations in millions (log scale)") +
+  ylab("Total number of murders (log scale)") +
+  ggtitle("US Gun Murders in 2010") +
+  scale_color_discrete(name = "Region") +
+  theme_economist()
+```
+
+# Visualization principles {#principles}
+
+We've focused on *how* to build plots. This section is about building *good* ones. The examples
+below contrast common but misleading chart choices with clearer alternatives. The guiding
+question is always: does the chart let the reader read the data accurately and quickly?
+
+```{r principles-setup, warning=FALSE, message=FALSE}
+library(gridExtra)   # arrange several plots in one figure (grid.arrange)
+```
+
+```{r browsers-data, echo=FALSE}
+# Made-up browser market-share data for 2000 vs 2015, used to compare chart types.
+browsers <- data.frame(Browser = rep(c("Opera","Safari","Firefox","IE","Chrome"), 2),
+                       Year = rep(c(2000, 2015), each = 5),
+                       Percentage = c(3,21,23,28,26, 2,22,21,27,29)) %>%
+  mutate(Browser = reorder(Browser, Percentage))   # order slices by size
+```
+
+## Avoid pie and donut charts {#pie-vs-bar}
+
+Humans judge **length** and **position** far more accurately than **angles** and **areas**. Pie
+charts (and donut charts) ask the reader to compare angles, which is hard — try ranking the
+browsers below, or judging how much each changed from 2000 to 2015.
+
+```{r piechart, echo=FALSE}
+library(ggthemes)
+# Pie chart = a stacked bar bent into a circle (coord_polar). Angles are hard to compare.
+p1 <- browsers %>% ggplot(aes(x = "", y = Percentage, fill = Browser)) +
+  geom_bar(width = 1, stat = "identity", col = "black")  + coord_polar(theta = "y") +
+  theme_excel() + xlab("") + ylab("") +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank()) +
+  facet_grid(. ~ Year)
+p1
+```
+
+A donut chart is the same idea with the center removed — it discards even the (weak) area cue,
+leaving only arc length:
+
+```{r donutchart, echo=FALSE}
+browsers %>% ggplot(aes(x = 2, y = Percentage, fill = Browser)) +
+  geom_bar(width = 1, stat = "identity", col = "black")  +
+  scale_x_continuous(limits = c(0.5, 2.5)) + coord_polar(theta = "y") +
+  theme_excel() + xlab("") + ylab("") +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank()) +
+  facet_grid(. ~ Year)
+```
+
+Often the honest thing is to just show the numbers:
+
+```{r browsers-table, echo=FALSE}
+browsers %>% spread(Year, Percentage) %>% knitr::kable()   # A plain table of the values
+```
+
+A **bar chart** turns those same numbers into lengths along a common baseline, which the eye
+reads precisely and can rank at a glance:
+
+```{r barplot, fig.height = 5}
+# Bar chart of the same data: lengths on a shared axis are easy to compare and rank.
+p2 <- browsers %>%
+  ggplot(aes(Browser, Percentage)) +
+  geom_bar(stat = "identity", width = 0.5, fill = 4, col = 1) +
+  ylab("Percent using the Browser") +
+  facet_grid(. ~ Year)
+grid.arrange(p1, p2, nrow = 2)   # Pie (top) vs bar (bottom), side by side
+```
+
+Adding numeric labels to a pie helps a little, but if you need to print every number, the pie
+itself isn't doing any work:
+
+```{r pie-labels, echo=FALSE, warning=FALSE, message=FALSE}
+library(scales)
+browsers <- filter(browsers, Year == 2015)
+# Position the labels around the pie.
+at <- with(browsers, 100 - cumsum(c(0, Percentage[-length(Percentage)])) - 0.5 * Percentage)
+label <- percent(browsers$Percentage / 100)
+browsers %>% ggplot(aes(x = "", y = Percentage, fill = Browser)) +
+  geom_bar(width = 1, stat = "identity", col = "black")  + coord_polar(theta = "y") +
+  theme_excel() + xlab("") + ylab("") + ggtitle("2015") +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank()) +
+  annotate(geom = "text", x = 1.62, y = at, label = label, size = 4)
+```
+
+## Start bars at zero {#start-at-zero}
+
+Because a bar encodes its value as a **length**, the axis must start at zero — otherwise the
+lengths no longer represent the numbers and small differences look huge. This border-apprehensions
+bar chart starts at zero, so the modest year-to-year change is shown honestly:
+
+```{r border-bar, echo=FALSE}
+data.frame(Year = as.character(c(2011, 2012, 2013)),
+           Southwest_Border_Apprehensions = c(165244, 170223, 192298)) %>%
+  ggplot(aes(Year, Southwest_Border_Apprehensions)) +
+  geom_bar(stat = "identity", fill = "darkred", col = "black", width = 0.65) +
+  ylab("Southwest border apprehensions")
+```
+
+The same rule keeps election results honest — with a zero baseline, a near-tie *looks* like a
+near-tie:
+
+```{r election-bar}
+data.frame(candidate = c("Moros", "Radonski"), percentages = c(50.66, 49.07)) %>%
+  ggplot(aes(candidate, percentages)) +
+  geom_bar(stat = "identity", fill = "darkred", col = "black", width = 0.65) +
+  ylab("Election result (%)")
+```
+
+## Represent quantities with length or position, not area {#area}
+
+If you encode a value with a circle's **radius**, the *area* grows with the square of the value,
+visually exaggerating differences. The top row below sizes circles by radius (misleading); a bar
+chart of the same GDP figures is far clearer:
+
+```{r gdp-bubble, echo=FALSE, fig.height=4.5}
+gdp <- c(14.6, 5.7, 5.3, 3.3, 2.5)
+gdp_data <- data.frame(Country = rep(c("United States", "China", "Japan", "Germany", "France"), 2),
+           y = factor(rep(c("Radius","Area"), each = 5), levels = c("Radius", "Area")),
+           GDP = c(gdp^2 / min(gdp^2), gdp / min(gdp))) %>%
+   mutate(Country = reorder(Country, GDP))
+gdp_data %>%
+  ggplot(aes(Country, y, size = GDP)) +
+  geom_point(show.legend = FALSE, color = "darkred") +
+  scale_size(range = c(2, 30)) +
+  coord_flip() + ylab("") + xlab("")
+```
+
+```{r gdp-bar, echo=FALSE}
+# The same GDP figures as bar LENGTHS — accurate and easy to compare.
+gdp <- c(14.6, 5.7, 5.3, 3.3, 2.5)
+gdp_data <- data.frame(Country = c("United States", "China", "Japan", "Germany", "France"), gdp = gdp)
+gdp_data <- gdp_data %>% mutate(Country = reorder(Country, gdp))
+
+gdp_data %>% ggplot(aes(Country, gdp)) +
+  geom_bar(stat = "identity", fill = "darkred", col = "black") +
+  ylab("GDP in trillions of US dollars")
+```
+
+## ...but zero isn't always required {#not-always-zero}
+
+The zero rule is about **bars**. When you encode values with **position** instead (points/dots),
+forcing the axis to zero can crush the very differences you want to show. Below, the left panel
+starts at zero and hides the variation across continents; the right panel lets the data set the
+range and the pattern is clear:
+
+```{r life-exp, echo=FALSE, fig.height=4, fig.width=6}
+p1 <- gapminder %>% filter(year == 2012) %>%
+  ggplot(aes(continent, life_expectancy)) +
+  geom_point() +
+  ylab("Life expectancy (Years)") +
+  xlab("")
+p2 <- p1 +
+  scale_y_continuous(limits = c(0, 84))   # Forced to start at zero
+grid.arrange(p2, p1, ncol = 2)             # zero-based (left) vs data-driven (right)
+```
+
+<div class="callout keyidea">
+<span class="label">Principles, in one line</span>
+Prefer <strong>length and position</strong> over angle and area; <strong>start bars at zero</strong>
+(but not necessarily dot/scatter plots); order categories meaningfully; and when in doubt, a
+clean table beats a confusing chart.
+</div>
+
+# Case study: Vaccines {#vaccines}
+
+Vaccines are one of public health's greatest successes, yet they're often the target of doubt.
+A good visualization can make the case more powerfully than a table of numbers. We'll create a
+powerful plot of measles in the United States.
+
+```{r load-diseases}
+library(dslabs)
+data(us_contagious_diseases)      # Yearly disease counts by U.S. state
+head(us_contagious_diseases)
+```
+
+We compute a **rate** (cases per 100,000 people per year), adjusting for how many weeks each
+state actually reported, and drop Hawaii and Alaska (which became states partway through the
+record):
+
+```{r measles-rate}
+measles <- us_contagious_diseases %>%
+  filter(!state %in% c("Hawaii", "Alaska") & disease == "Measles") %>%   # Contiguous states, measles only
+  mutate(rate = (count / weeks_reporting) * 52 / (population / 100000))   # Annualized rate per 100,000
+```
+
+`RColorBrewer` provides carefully designed color palettes. The **sequential** palettes suit data
+that runs low-to-high (like a rate); **diverging** palettes suit data with a meaningful midpoint.
+
+```{r brewer-palettes, fig.height=7}
+library(RColorBrewer)
+display.brewer.all(type = "seq")   # Sequential palettes (low -> high)
+display.brewer.all(type = "div")   # Diverging palettes (around a midpoint)
+```
+
+Now the plot: a **heatmap** (`geom_tile`) with year on the x-axis, states stacked on the y-axis,
+and color showing the measles rate. The blue vertical line marks 1963, when the vaccine was
+introduced.
+
+```{r measles-heatmap, fig.height=7}
+measles %>%
+  ggplot(aes(year, state, fill = rate)) +
+  geom_tile(color = "grey50") +                                  # One colored tile per state-year
+  scale_x_continuous(expand = c(0, 0)) +                         # No padding on the x-axis
+  scale_fill_gradientn(colors = brewer.pal(9, "Reds"),           # Red = higher rate
+                       trans = "sqrt",                           # Square-root scale reveals low values
+                       name = "Rate") +
+  geom_vline(xintercept = 1963, col = "blue") +                  # Vaccine introduced in 1963
+  theme_minimal() +
+  theme(panel.grid = element_blank(),
+        axis.text.y = element_text(size = 6, lineheight = 0.8)) +
+  ggtitle("Measles cases in the United States") +
+  ylab("") +
+  xlab("")
+```
+
+The story needs no caption: measles rates are high and widespread across states for decades, then
+collapse almost everywhere right after the 1963 vaccine line. This is the grammar of graphics and
+good design working together — the data component (rates by state and year), the geometry
+(`geom_tile`), the aesthetic mapping (color for rate), and a well-chosen scale combine into a
+single, convincing picture.
+
+# Self-Assessment Questions {#self-assessment}
+
+Try each question **before** revealing the answer. They build from foundational to challenging
+and use the datasets loaded above. Click **"Show answer"** to check your work.
+
+## Beginner {#beginner}
+
+**Q1.** Every `ggplot2` plot is built from three core components. Name them.
+
+<details>
+<summary>Show answer</summary>
+
+**Data**, an **aesthetic mapping** (`aes()`), and a **geometry** (`geom_*`). You supply the data,
+map variables to visual properties with `aes()`, and choose a geometry to draw.
+
+</details>
+
+**Q2.** Which geometry function draws a scatterplot?
+
+<details>
+<summary>Show answer</summary>
+
+`geom_point()`.
+
+</details>
+
+**Q3.** Write the code to start a plot from `murders`, mapping `population` to the x-axis and
+`total` to the y-axis, and drawing points.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+murders %>%
+  ggplot(aes(x = population, y = total)) +
+  geom_point()
+```
+
+</details>
+
+## Intermediate {#intermediate}
+
+**Q4.** What's the difference between `geom_point(aes(color = region))` and
+`geom_point(color = "blue")`?
+
+<details>
+<summary>Show answer</summary>
+
+The first is *inside* `aes()`, so color is **mapped to the `region` variable** — each region gets
+its own color and a legend appears. The second is *outside* `aes()`, so it sets **every** point to
+the same fixed blue and adds no legend.
+
+</details>
+
+**Q5.** Add layers to put **both** axes on a log-10 scale.
+
+<details>
+<summary>Show answer</summary>
+
+```r
+... +
+  scale_x_log10() +
+  scale_y_log10()
+```
+
+</details>
+
+**Q6.** Give two ways to add a plot title.
+
+<details>
+<summary>Show answer</summary>
+
+`+ ggtitle("My title")` or `+ labs(title = "My title")`. (`labs()` can also set axis labels:
+`labs(title =, x =, y =)`.)
+
+</details>
+
+## Advanced {#advanced}
+
+**Q7.** Explain the difference between a **global** aesthetic mapping and a **local** one, and why
+you might use each.
+
+<details>
+<summary>Show answer</summary>
+
+A mapping placed in `ggplot(aes(...))` is **global** — every layer inherits it, so you don't
+repeat yourself. A mapping placed inside a specific `geom_*(aes(...))` is **local** — it applies
+only to that layer and **overrides** the global mapping there. Use a global mapping for the shared
+x/y/label; use a local one when a single layer needs something different (e.g. one annotation at a
+fixed position).
+
+</details>
+
+**Q8.** From a design standpoint, why is a bar chart usually preferable to a pie chart?
+
+<details>
+<summary>Show answer</summary>
+
+People read **length and position** along a common axis far more accurately than they read the
+**angles and areas** a pie chart relies on. A bar chart lets the reader rank categories and judge
+differences precisely; a pie chart usually can't.
+
+</details>
+
+**Q9.** You're told to "always start the y-axis at zero." When is that advice *wrong*, and why?
+
+<details>
+<summary>Show answer</summary>
+
+The zero rule applies to **bars**, whose value is encoded as a length from the baseline. For
+plots that encode value by **position** (points, dot plots, scatterplots), forcing zero can
+compress the data and hide real differences — there it's often better to let the data determine
+the range.
+
+</details>
+
+# Frequently Asked Questions (FAQ) {#faq}
+
+**What is the "grammar of graphics"?**
+It's the idea that any plot can be described as a combination of a few building blocks — data,
+aesthetic mappings, geometries, scales, and themes. Learn the blocks and how they combine, and you
+can build almost any chart without memorizing each one separately.
+
+**In `ggplot2`, when do I use `+` and when do I use `%>%`?**
+Use the pipe `%>%` to feed your data *into* `ggplot()`, then use `+` to add each *layer* onto the
+plot. A common beginner slip is using `+` where a `%>%` belongs (or vice-versa) — remember: pipe
+into the plot, add layers with plus.
+
+**What goes inside `aes()` versus outside it?**
+Put something **inside** `aes()` to map it to a column of your data (color by region, size by
+population) — this creates a legend. Put it **outside** `aes()` to set one fixed value for the
+whole layer (all points blue, all points size 3).
+
+**My `color =` / `size =` changed every point the same way — I wanted a legend. What happened?**
+You set it outside `aes()`. Move it inside — `aes(color = region)` — to map it to a variable and
+get per-category colors plus a legend.
+
+**How do I change the overall look of a plot?**
+Add a `theme_*()` layer. `ggplot2` ships with themes like `theme_minimal()` and `theme_bw()`, and
+the `ggthemes` package adds many more (e.g. `theme_economist()`, `theme_fivethirtyeight()`).
+
+**What are `ggthemes` and `ggrepel` for?**
+`ggthemes` adds extra ready-made styles. `ggrepel` provides `geom_text_repel()`, which places text
+labels so they don't overlap each other or the points — much cleaner than `geom_text()` on crowded
+plots.
+
+**`geom_text` vs `geom_label` vs `geom_text_repel` — which do I use?**
+`geom_text()` writes plain text; `geom_label()` puts it in a little box; `geom_text_repel()` (from
+`ggrepel`) is like `geom_text()` but nudges labels apart so they stay readable when points are
+close together.
+
+**Should I ever use a pie chart?**
+Rarely. For almost any comparison, a bar chart communicates more accurately. Reach for a pie only
+when you truly just need to show "a part of a whole" at a glance and precise comparison doesn't
+matter — and even then, a bar chart usually still wins.
+
+<div class="callout keyidea">
+<span class="label">You can build (good) plots now</span>
+You've learned the grammar — data, aesthetics, geometries, scales, themes — layered a real plot up
+piece by piece, and seen the design principles that separate a clear chart from a misleading one.
+Keep the cheat sheet nearby, and let EDA guide your analysis before you model anything.
+</div>
