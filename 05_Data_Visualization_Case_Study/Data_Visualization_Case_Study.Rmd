@@ -1,0 +1,539 @@
+---
+title: "Data Visualization Case Study"
+subtitle: "Week 6 — Gapminder case study, Time Series, and Transformations"
+output:
+  html_document:
+    css: crimson.css
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 2
+    number_sections: true
+    df_print: paged
+    code_folding: show
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+# This "setup" chunk runs first and stays hidden (include=FALSE). It sets options
+# that apply to every chunk so the whole document looks consistent.
+knitr::opts_chunk$set(
+  echo    = TRUE,     # Show the R code in the final document
+  message = FALSE,    # Hide package start-up messages (keeps output tidy)
+  warning = FALSE,    # Hide warnings (keeps output tidy)
+  comment = "#>"      # Prefix printed output with "#>"
+)
+```
+
+# Introduction {#introduction}
+
+In this section we will demonstrate how relatively simple `ggplot` code can create insightful and aesthetically pleasing plots that help us better understand trends in world health and economics. We later augment the code somewhat to perfect the plots and describe some general principles for data visualization.
+
+[Hans Rosling](https://en.wikipedia.org/wiki/Hans_Rosling) was the co-founder of the [Gapminder Foundation](http://www.gapminder.org/), an organization dedicated to educating the public by using data to dispel common myths about the so-called developing world. The organization uses data to show how actual trends in health and economics contradict the narratives that emanate from sensationalist media coverage of catastrophes, tragedies and other unfortunate events. As stated on the Gapminder Foundation's website:
+
+> Journalists and lobbyists tell dramatic stories. That's their job. They tell stories about extraordinary events and unusual people. The piles of dramatic stories pile up in peoples' minds into an over-dramatic worldview and strong negative stress feelings: "The world is getting worse!", "It's we vs. them!", "Other people are strange!", "The population just keeps growing!" and "Nobody cares!"
+
+Hans Rosling conveyed actual data-based trends in a dramatic way of his own, using effective data visualization. This section is based on two talks that exemplify this approach to education: [New Insights on Poverty](https://www.ted.com/talks/hans_rosling_reveals_new_insights_on_poverty?language=en) and [The Best Stats You've Ever Seen](https://www.ted.com/talks/hans_rosling_shows_the_best_stats_you_ve_ever_seen). Specifically, in this section, we set out to answer the following two questions using data:
+
+1. Is it a fair characterization of today's world to say it is divided into western rich nations and the developing world in Africa, Asia and Latin America?
+2. Has income inequality across countries worsened during the last 40 years?
+
+To answer these questions we will be using the `gapminder` dataset provided in `dslabs`. This dataset was created using a number of spreadsheets available from the [Gapminder](http://www.gapminder.org/) Foundation. You can access the table like this:
+
+```{r load-libraries, message=FALSE, echo=TRUE}
+library(tidyverse)   # ggplot2 (plots) + dplyr (wrangling)
+library(dslabs)      # Provides the gapminder dataset
+library(gridExtra)   # Helper for arranging multiple plots (used in some examples)
+data(gapminder)
+head(gapminder)      # Peek at the first six rows
+```
+
+<div class="callout tip">
+<span class="label">How to use this document</span>
+This is a case study: read the explanation, run each chunk, and study how the plot changes as we
+add layers. Every code chunk is commented, and for the step-by-step plot builds we flag what's
+<code>NEW</code> in each version. (Keep <code>crimson.css</code> in the same folder when you knit.)
+</div>
+
+# Hans Rosling's Quiz {#quiz}
+
+As done in the _New Insights on Poverty_ video, we start by testing our knowledge regarding differences in child mortality across different countries.
+
+For each of the five pairs of countries below, which country do you think had the highest child mortality in 2015? Which pairs do you think are most similar?
+
+1. Sri Lanka or Turkey
+2. Poland or South Korea
+3. Malaysia or Russia
+4. Pakistan or Vietnam
+5. Thailand or South Africa
+
+<div class="callout tip">
+<span class="label">Guess first</span>
+Jot down your five guesses before reading on — the point of the exercise is to compare your
+intuition to what the data actually say.
+</div>
+
+When answering these questions without data, the non-European countries are typically picked as having higher mortality rates: Sri Lanka over Turkey, South Korea over Poland, and Malaysia over Russia. It is also common to assume that countries considered to be part of the developing world, Pakistan, Vietnam, Thailand and South Africa, have similarly high mortality rates.
+
+To answer these questions __with data__ we can use `dplyr`. For example, for the first comparison we see that Turkey has the higher rate.
+
+```{r quiz-first-pair, message=FALSE, warning=FALSE}
+# Filter to the two countries in 2015 and show just their infant mortality
+gapminder %>% filter(year == 2015 & country %in% c("Sri Lanka", "Turkey")) %>%
+              select(country, infant_mortality)
+```
+
+We can use this code on all comparisons and find the following:
+
+```{r quiz-table, echo=FALSE, warning=FALSE, message=FALSE}
+# Build a lookup of the five country pairs, then join in each country's 2015 rate.
+comp_table <- tibble(comparison = rep(1:5, each = 2),
+              country = c("Sri Lanka", "Turkey", "Poland", "South Korea", "Malaysia",
+                          "Russia", "Pakistan", "Vietnam", "Thailand", "South Africa"))
+
+tmp <- gapminder %>% filter(year == 2015) %>%
+                     select(country, infant_mortality) %>%
+                     mutate(country = as.character(country))  # Match characters to characters for the join
+
+tab <- inner_join(comp_table, tmp, by = "country") %>% select(-comparison)
+
+# Lay the pairs out side by side (odd rows = country 1, even rows = country 2)
+bind_cols(slice(tab, seq(1, 9, 2)), slice(tab, seq(2, 10, 2))) %>%
+  knitr::kable(col.names = c('Country_1', 'Infant_Mortality_1', 'Country_2', 'Infant_Mortality_2'))
+```
+
+We see that the European countries have higher rates: Poland has a higher rate than South Korea, and Russia has a higher rate than Malaysia. We also see that Pakistan has a much higher rate than Vietnam and South Africa a much higher rate than Thailand. It turns out that most people do worse if they are guessing, which implies we are more than ignorant, we are misinformed.
+
+# Life Expectancy and Fertility Rates {#life-fertility}
+
+The reason for this stems from the preconceived notion that the world is divided into two groups: the western world (Western Europe and North America), characterized by long life spans and small families, versus the developing world (Africa, Asia, and Latin America) characterized by short life spans and large families. But, does the data support this dichotomous view of two groups?
+
+The necessary data to answer this question is also available in our `gapminder` table. Using our newly learned data visualization skills we will be able to answer this question.
+
+The first plot we make to see what the data have to say about this world view is a scatter plot of life expectancy versus fertility rates (average number of children per woman). We will start by looking at data from about 50 years ago, when perhaps this view was cemented in our minds.
+
+```{r scatter-1962, warning=FALSE}
+ds_theme_set()   # Use the clean default dslabs theme
+
+gapminder %>% filter(year == 1962) %>%
+  ggplot(aes(fertility, life_expectancy)) +
+  geom_point() +
+  ylab("Life expectancy (years)") +
+  xlab("Fertility (avg number of children per woman)")
+```
+
+Most points fall into two distinct categories:
+
+1. Life expectancy around 70 years and 3 or fewer children per family.
+2. Life expectancies lower than 65 years and with more than 5 children per family.
+
+To confirm that indeed these countries are from the regions we expect, we can use color to represent continent.
+
+```{r scatter-1962-color}
+filter(gapminder, year == 1962) %>%
+  ggplot(aes(fertility, life_expectancy, color = continent)) +   # NEW: map continent to color
+  geom_point() +
+  xlab("Fertility (avg number of children per woman)") +
+  ylab("Life expectancy (years)") +
+  scale_color_discrete(name = "Continent")                       # NEW: capitalize the legend title
+```
+
+So in 1962, "the west versus developing world" view was grounded in some reality. But is this still the case 50 years later?
+
+# Faceting {#faceting}
+
+We could easily plot the 2012 data in the same way we did for 1962. But to compare, side by side plots are preferable. In `ggplot` we can achieve this by _faceting variables_: we stratify the data by some variable and make the same plot for each stratum.
+
+To achieve faceting we add a layer with the function `facet_grid`, which automatically separates the plots. This function lets you facet by up to two variables using columns to represent one variable and rows to represent the other. The function expects the row and column variables separated by a `~`. Here is an example of a scatter plot with `facet_grid` added as the last layer:
+
+```{r facet-grid-two, warning=FALSE}
+gapminder %>% filter(year %in% c(1962, 2012)) %>%
+  ggplot(aes(fertility, life_expectancy, color = continent)) +
+  geom_point() +
+  facet_grid(continent ~ year) +   # NEW: rows = continent, columns = year (two faceting variables)
+  xlab("Fertility (avg number of children per woman)") +
+  ylab("Life expectancy (years)") +
+  scale_color_discrete(name = "Continent")
+```
+
+We see a plot for each continent/year pair. However, this is just an example, and more than what we want, which is simply to compare 1962 and 2012. In this case, there is just one variable and we use `.` to let facet know that we are not using one of the variables:
+
+```{r facet-grid-one, warning=FALSE}
+filter(gapminder, year %in% c(1962, 2012)) %>%
+  ggplot(aes(fertility, life_expectancy, color = continent)) +
+  geom_point() +
+  facet_grid(. ~ year) +   # NEW: the "." means "no row variable" — just split into columns by year
+  xlab("Fertility (avg number of children per woman)") +
+  ylab("Life expectancy (years)") +
+  scale_color_discrete(name = "Continent")
+```
+
+This plot clearly shows that the majority of countries have moved from the _developing world_ cluster to the _western world_ one. In 2012, the western versus developing world view no longer makes sense. This is particularly clear when comparing Europe to Asia, which includes several countries that have made great improvements.
+
+## `facet_wrap` {#facet-wrap}
+
+To explore how this transformation happened through the years, we can make the plot for several years. For example we can add 1970, 1980, 1990, and 2000. If we do this, we will not want all the plots on the same row, the default behavior of `facet_grid`, as they will become too thin to show the data. Instead we will want to use multiple rows and columns. The function `facet_wrap` permits us to do this, as it automatically wraps the series of plots so that each display has viewable dimensions:
+
+```{r facet-wrap}
+years <- c(1962, 1970, 1980, 1990, 2000)
+continents <- c("Europe", "Asia")
+gapminder %>%
+  filter(year %in% years & continent %in% continents) %>%
+  ggplot(aes(fertility, life_expectancy, color = continent)) +
+  geom_point() +
+  facet_wrap(. ~ year) +   # NEW: wrap the five yearly panels across multiple rows/columns
+  xlab("Fertility (avg number of children per woman)") +
+  ylab("Life expectancy (years)") +
+  scale_color_discrete(name = "Continent")
+```
+
+This plot clearly shows how most Asian countries have improved at a much faster rate than European ones.
+
+# Time Series Plots {#time-series}
+
+The visualizations above effectively illustrate that data no longer support the western versus developing world view. Once we see these plots new questions emerge. For example, which countries are improving more, which ones less? Was the improvement constant during the last 50 years or was there more accelerated improvement during certain periods? For a closer look that may help answer these questions, we introduce _time series plots_.
+
+Time series plots have time on the x-axis and an outcome or measurement of interest on the y-axis. For example, here is a trend plot for the United States fertility rates:
+
+```{r ts-points, warning=FALSE}
+gapminder %>% filter(country == "United States") %>%
+  ggplot(aes(year, fertility)) +
+  geom_point() +                       # Time on x, fertility on y
+  xlab("Year") +
+  ylab("Fertility (avg number of children per woman)")
+```
+
+We see that the trend is not linear at all. Instead we see a sharp drop during the 60s and 70s to below 2. Then the trend comes back to 2 and stabilizes during the 90s.
+
+When the points are regularly and densely spaced, as they are here, we create curves by joining the points with lines, to convey that these data are from a single country. To do this we use the `geom_line` function instead of `geom_point`.
+
+```{r ts-line, warning=FALSE}
+gapminder %>% filter(country == "United States") %>%
+  ggplot(aes(year, fertility)) +
+  geom_line() +                        # NEW: connect the points into a curve
+  xlab("Year") +
+  ylab("Fertility (avg number of children per woman)")
+```
+
+## Drawing one line per group {#grouping}
+
+This is particularly helpful when we look at two countries. If we subset the data to include two countries, one from Europe and one from Asia, then copy the code above:
+
+```{r ts-two-wrong, warning=FALSE}
+countries <- c("South Korea", "Germany")
+gapminder %>% filter(country %in% countries) %>%
+  ggplot(aes(year, fertility)) +
+  geom_line() +   # Problem: with no grouping, ggplot joins ALL points into one zig-zag line
+  xlab("Year") +
+  ylab("Fertility (avg number of children per woman)")
+```
+
+Note that this is __not__ the plot that we want. Rather than a line for each country, the points for both countries are joined. This is actually expected since we have not told `ggplot` anything about wanting two separate lines. To let `ggplot` know that there are two curves that need to be made separately, we assign each point to a `group`, one for each country:
+
+```{r ts-two-group, warning=FALSE}
+countries <- c("South Korea", "Germany")
+gapminder %>% filter(country %in% countries) %>%
+  ggplot(aes(year, fertility, group = country)) +   # NEW: group = country -> one line per country
+  geom_line() +
+  xlab("Year") +
+  ylab("Fertility (avg number of children per woman)")
+```
+
+But which line goes with which country? We can assign colors to make this distinction. A useful side-effect of using the `color` argument to assign different colors to the different countries is that the data is automatically grouped:
+
+```{r ts-two-color, warning=FALSE}
+countries <- c("South Korea", "Germany")
+gapminder %>% filter(country %in% countries) %>%
+  ggplot(aes(year, fertility, color = country)) +   # NEW: color = country both colors AND groups
+  geom_line() +
+  xlab("Year") +
+  ylab("Fertility (avg number of children per woman)") +
+  scale_color_discrete(name = "Country")
+```
+
+The plot clearly shows how South Korea's fertility rate dropped drastically during the 60s and 70s and by 1990 had a similar rate to Germany.
+
+## Labels over legends {#labels}
+
+For trend plots we recommend labeling the lines rather than using legends as the viewer can quickly see which line is which country. This suggestion actually applies to most plots: labeling is usually preferred over legends.
+
+We demonstrate how we can do this using the fertility data. We define a data table with the label locations and then use a second mapping just for these labels:
+
+```{r ts-labels}
+# A small table saying WHERE to place each country's label (x = year, y = fertility)
+labels <- data.frame(country = countries, x = c(1975, 1965), y = c(5, 2.75))
+
+gapminder %>% filter(country %in% countries) %>%
+  ggplot(aes(year, fertility, color = country)) +
+  geom_line() +
+  geom_text(data = labels, aes(x, y, label = country), size = 5) +   # NEW: draw labels on the lines
+  theme(legend.position = "none") +                                  # NEW: remove the now-redundant legend
+  xlab("Year") +
+  ylab("Fertility (avg number of children per woman)")
+```
+
+# Transformations {#transformations}
+
+Another commonly held notion is that wealth distribution across the world has become worse during the last several decades. When general audiences are asked if poor countries have become poorer and rich countries become richer, the majority answer yes. By using stratification, histograms, smooth densities, and boxplots we will be able to understand if this is in fact the case. We will also learn how transformations can sometimes help provide more informative summaries and plots.
+
+The `gapminder` data table includes a column with the countries' gross domestic product (GDP). GDP measures the market value of goods and services produced by a country in a year. The GDP per person is often used as a rough summary of how rich a country is. Here we divide this quantity by 365 to obtain the more interpretable measure _dollars per day_. Using current US dollars as a unit, a person surviving on an income of less than \$2 a day is defined to be living in _absolute poverty_. We add this variable to the data table:
+
+```{r dollars-per-day}
+# dollars_per_day = GDP per person per day
+gapminder <- gapminder %>%
+  mutate(dollars_per_day = gdp / population / 365)
+```
+
+Note that the GDP values are adjusted for inflation and represent current US dollars, so these values are meant to be comparable across the years. Also note that these are country averages and that within each country there is much variability. All the graphs and insights described below relate to country averages and not to individuals.
+
+## Country income distribution {#income-distribution}
+
+Here is a histogram of per day incomes from 1970:
+
+```{r income-hist}
+past_year <- 1970
+gapminder %>%
+  filter(year == past_year & !is.na(gdp)) %>%
+  ggplot(aes(dollars_per_day)) +
+  geom_histogram(binwidth = 1, color = "black", fill = "darkred") +   # color="black" draws bin borders
+  xlab("Dollars per day") +
+  ylab("Number of countries")
+```
+
+We use the `color = "black"` argument to draw a boundary and clearly distinguish the bins.
+
+In this plot we see that for the majority of countries, averages are below \$10 a day. However, the majority of the x-axis is dedicated to the `r filter(gapminder, year == past_year & !is.na(gdp)) %>% summarise(x = sum(dollars_per_day > 10)) %>% .$x` countries with averages above \$10. So the plot is not very informative about countries with values below \$10 a day.
+
+It might be more informative to quickly be able to see how many countries have average daily incomes of about \$1 (extremely poor), \$2 (very poor), \$4 (poor), \$8 (middle), \$16 (well off), \$32 (rich), \$64 (very rich) per day. These changes are multiplicative and log transformations change multiplicative changes into additive ones: when using base 2, a doubling of a value turns into an increase by 1.
+
+Here is the distribution if we apply a log base 2 transformation:
+
+```{r income-hist-log2}
+gapminder %>%
+  filter(year == past_year & !is.na(gdp)) %>%
+  ggplot(aes(log2(dollars_per_day))) +   # NEW: log base 2 of the values BEFORE plotting
+  geom_histogram(binwidth = 1, color = "black", fill = "darkred") +
+  xlab("Dollars per day (log2 scale)") +
+  ylab("Number of countries")
+```
+
+In a way this provides a _close up_ of the mid to lower income countries.
+
+## Which base? {#which-base}
+
+In the case above we used base 2 in the log transformations. Other common choices are base $e$ (the natural log) and base 10.
+
+In general, we do not recommend using the natural log for data exploration and visualization. This is because while $2^2, 2^3, 2^4, \dots$ or $10^1, 10^2, \dots$ are easy to compute in our heads, the same is not true for $\mathrm{e}^2, \mathrm{e}^3, \dots$.
+
+In the dollars per day example, we used base 2 instead of base 10 because the resulting range is easier to interpret. The range of the values being plotted is (`r with(filter(gapminder, year==past_year), range(dollars_per_day, na.rm=TRUE))`).
+
+In base 10 this turns into a range that includes very few integers: just 0 and 1. With base two, our range includes -2, -1, 0, 1, 2, 3, 4 and 5. It is easier to compute $2^x$ and $10^x$ when $x$ is an integer and between -10 and 10, so we prefer to have more small integers on the scale. Another consequence of a limited range is that choosing the binwidth is more challenging. With log base 2, we know that a binwidth of 1 will translate to a bin with range $x$ to $2x$.
+
+As an example in which base 10 makes more sense consider population sizes. A log base 10 makes more sense since the range for these is about 1,000 to 10 billion. Here is the histogram of the transformed values:
+
+```{r population-hist-log10}
+gapminder %>% filter(year == past_year) %>%
+  ggplot(aes(log10(population))) +   # NEW: log base 10 — better for the huge range of populations
+  geom_histogram(binwidth = 0.5, color = "black", fill = "darkred") +
+  xlab("Population (log10 scale)") +
+  ylab("Number of countries")
+```
+
+Here we quickly see that country populations range between ten thousand and ten billion.
+
+## Transform the values or the scale? {#values-or-scale}
+
+There are two ways we can use log transformations in plots. We can log the values before plotting them or use log scales in the axes. Both approaches are useful and have different strengths. If we log the data we can more easily interpret intermediate values in the scale. For example, if we see
+
+```
+----1----x----2--------3----
+```
+
+for log transformed data we know that the value of $x$ is about 1.5. If the scales are logged
+
+```
+----1----x----10------100---
+```
+
+then, to determine `x`, we need to compute $10^{1.5}$, which is not easy to do in our heads. However, the advantage of showing logged scales is that the original values are displayed in the plot, which are easier to interpret. For example, we would see "32 dollars a day" instead of "5 log base 2 dollars a day".
+
+As we learned earlier, if we want to scale the axis with logs we can use the `scale_x_continuous` function. So instead of logging the values first, we apply this layer:
+
+```{r income-hist-scale}
+gapminder %>%
+  filter(year == past_year & !is.na(gdp)) %>%
+  ggplot(aes(dollars_per_day)) +                       # NOTE: plot the raw values...
+  geom_histogram(binwidth = 1, color = "black", fill = "darkred") +
+  scale_x_continuous(trans = "log2") +                 # NEW: ...and let the AXIS do the log2 transform
+  xlab("Dollars per day") +
+  ylab("Number of countries")
+```
+
+Note that the log base 10 transformation has its own function: `scale_x_log10()`, but currently base 2 does not, although we could easily define our own.
+
+Note that there are other transformations available through the `trans` argument. As we learn later on, the square root (`sqrt`) transformation, for example, is useful when considering counts. The logistic transformation (`logit`) is useful when plotting proportions between 0 and 1. The `reverse` transformation is useful when we want smaller values to be on the right or on top.
+
+# Self-Assessment Questions {#self-assessment}
+
+Try each question **before** revealing the answer. They build from foundational to challenging and
+use the `gapminder` dataset. Click **"Show answer"** to check your work.
+
+## Beginner {#beginner}
+
+**Q1.** Which `ggplot` layer splits a plot into side-by-side panels based on a variable?
+
+<details>
+<summary>Show answer</summary>
+
+`facet_grid()` (or `facet_wrap()`). Both make one panel per level of a variable.
+
+</details>
+
+**Q2.** In a scatterplot of `fertility` vs `life_expectancy`, how do you color the points by
+`continent`?
+
+<details>
+<summary>Show answer</summary>
+
+```r
+ggplot(aes(fertility, life_expectancy, color = continent)) + geom_point()
+```
+
+Putting `color = continent` inside `aes()` maps it to the variable and adds a legend.
+
+</details>
+
+**Q3.** To draw a **separate line for each country** in a time-series plot, which aesthetic must
+you set?
+
+<details>
+<summary>Show answer</summary>
+
+`group = country` (or `color = country`, which groups *and* colors at the same time). Without a
+group, `geom_line()` joins every point into one zig-zag.
+
+</details>
+
+## Intermediate {#intermediate}
+
+**Q4.** What's the difference between `facet_grid(continent ~ year)` and `facet_grid(. ~ year)`?
+
+<details>
+<summary>Show answer</summary>
+
+`facet_grid(continent ~ year)` uses **two** variables — continents as rows, years as columns.
+`facet_grid(. ~ year)` uses **one** — the `.` means "no row variable", so you just get one column
+per year.
+
+</details>
+
+**Q5.** Why did we use a **log base 2** transformation for `dollars_per_day`?
+
+<details>
+<summary>Show answer</summary>
+
+Income differences are *multiplicative* (\$2 → \$4 → \$8 …), and a log turns multiplicative steps
+into additive ones — with base 2, each doubling becomes a step of +1. The narrow range of the data
+also produces several small integer breaks, which are easy to read.
+
+</details>
+
+**Q6.** What's the difference between logging the **values** (e.g. `aes(log2(x))`) and logging the
+**scale** (e.g. `scale_x_continuous(trans = "log2")`)?
+
+<details>
+<summary>Show answer</summary>
+
+Logging the values makes intermediate positions easy to read (a point between 1 and 2 is ~1.5),
+but the axis shows transformed numbers. Logging the *scale* keeps the axis in the **original**
+units (you see "32", not "5"), which is easier to interpret — at the cost of harder-to-read
+intermediate positions.
+
+</details>
+
+## Advanced {#advanced}
+
+**Q7.** When would you reach for `facet_wrap()` instead of `facet_grid()`?
+
+<details>
+<summary>Show answer</summary>
+
+Use `facet_grid()` to lay panels out by one or two variables in a fixed rows-by-columns grid. Use
+`facet_wrap()` when you have **many** levels of a single variable (like five years) and want the
+panels to wrap across multiple rows and columns so each stays a readable size, instead of being
+squeezed into one long row.
+
+</details>
+
+**Q8.** Why are labels usually preferable to a legend on a trend plot?
+
+<details>
+<summary>Show answer</summary>
+
+A legend forces the viewer to look back and forth, matching colors to names. A label sits right on
+its line, so the viewer reads which line is which instantly. You remove the legend with
+`theme(legend.position = "none")` and add labels with `geom_text()`.
+
+</details>
+
+**Q9.** When is **base 10** a better log choice than base 2?
+
+<details>
+<summary>Show answer</summary>
+
+When the data span a huge range. Populations run from about a thousand to ten billion, so base 10
+(each step ×10) gives a handful of readable breaks; base 2 would need far too many. Base 2 shines
+for narrower, doubling-type quantities like income.
+
+</details>
+
+# Frequently Asked Questions (FAQ) {#faq}
+
+**`facet_grid` vs `facet_wrap` — which do I use?**
+`facet_grid` arranges panels by one or two variables in a strict rows × columns grid (great for
+"variable A down, variable B across"). `facet_wrap` takes the levels of a single variable and wraps
+them across as many rows and columns as needed so the panels stay a sensible size. Reach for
+`facet_wrap` when a `facet_grid` row would be too crowded.
+
+**What does the `.` mean in `facet_grid(. ~ year)`?**
+The formula is `rows ~ columns`. The `.` is a placeholder for "nothing here", so `. ~ year` means
+"no row variable, split into columns by year". You'd write `year ~ .` to split into rows instead.
+
+**Why did my two countries get joined into one messy line?**
+`geom_line()` connects points in order, and with no grouping it treats all the data as one series.
+Tell it there are separate series with `group = country` (or `color = country`, which also
+groups).
+
+**What's the difference between the `group` and `color` aesthetics?**
+`group` controls which points get connected/computed together but adds no visual distinction.
+`color` does the same grouping *and* gives each group its own color plus a legend. If you only need
+separate lines, `group` is enough; if you also want to tell them apart, use `color`.
+
+**Should I log the values or log the scale?**
+Log the **scale** (`scale_x_continuous(trans = "log2")`, `scale_x_log10()`) when you want the axis
+labeled in original units like "32 dollars a day" — usually the friendlier choice for a final
+figure. Log the **values** (`aes(log2(x))`) when you want intermediate positions to be easy to read
+off the axis.
+
+**Which log base should I pick?**
+Match the base to the data's range. Use base 2 for quantities that roughly double (like income),
+base 10 for quantities spanning many orders of magnitude (like population). Avoid the natural log
+for plots — powers of $e$ are hard to compute in your head.
+
+**How do I put country labels on the lines instead of a legend?**
+Build a small data frame of label positions (`x`, `y`, and the label text), add
+`geom_text(data = labels, aes(x, y, label = country))`, and drop the legend with
+`theme(legend.position = "none")`.
+
+**Is there a `scale_x_log2()` like `scale_x_log10()`?**
+Not built in — base 10 has its own shortcut `scale_x_log10()`, but for base 2 you use the general
+`scale_x_continuous(trans = "log2")` (or define your own transformation).
+
+<div class="callout keyidea">
+<span class="label">The big picture</span>
+With a handful of `ggplot` moves — color, faceting, lines with grouping, labels, and
+transformations — you can turn the `gapminder` table into a story that dismantles the "West vs.
+developing world" myth. That's exploratory data analysis and clear communication working together,
+exactly as Hans Rosling intended.
+</div>
