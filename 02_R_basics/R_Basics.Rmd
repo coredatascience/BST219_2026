@@ -112,6 +112,8 @@ record <- list(name = "John Doe",
                grades = c(95, 82, 91, 97, 93),
                final_grade = "A")
 class(record)     # -> "list"
+
+# test
 ```
 
 <div class="callout keyidea">
