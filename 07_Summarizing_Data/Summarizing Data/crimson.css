@@ -1,0 +1,128 @@
+/* ============================================================
+   crimson.css — Harvard Crimson theme for R Markdown HTML output
+   ------------------------------------------------------------
+   HOW TO USE:
+   Put this file in the same folder as your .Rmd, then add it to
+   the YAML header of any document:
+
+     output:
+       html_document:
+         css: crimson.css
+         toc: true
+         toc_float: true
+
+   TO RE-SKIN EVERYTHING: change only the hex codes in the
+   :root block below. Every element inherits from those.
+   ============================================================ */
+
+:root {
+  --crimson:       #A51C30;  /* Official Harvard crimson       */
+  --crimson-dark:  #8A1626;  /* Darker crimson for hovers      */
+  --crimson-soft:  #F7E8EB;  /* Soft crimson tint (backgrounds)*/
+  --ink:           #1F1F1F;  /* Body text                      */
+  --slate:         #4A4A4A;  /* Secondary text                 */
+  --mist:          #F6F6F6;  /* Light gray panels              */
+  --line:          #E3E3E3;  /* Hairline borders               */
+}
+
+/* ---- Base typography ---- */
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  line-height: 1.7;
+  font-size: 16px;
+}
+
+/* ---- Title block ---- */
+h1.title {
+  color: var(--crimson);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  border-bottom: 4px solid var(--crimson);
+  padding-bottom: 0.35em;
+}
+h3.subtitle, h4.date, h4.author {
+  color: var(--slate);
+  font-weight: 400;
+}
+
+/* ---- Section headings ---- */
+h1, h2, h3, h4 { color: var(--crimson); font-weight: 700; }
+h2 {
+  border-bottom: 2px solid var(--crimson-soft);
+  padding-bottom: 0.2em;
+  margin-top: 1.8em;
+}
+h3 { color: var(--crimson-dark); }
+
+/* ---- Links ---- */
+a { color: var(--crimson); text-decoration: none; }
+a:hover { color: var(--crimson-dark); text-decoration: underline; }
+
+/* ---- Floating table of contents ---- */
+.tocify { border-radius: 8px; border: 1px solid var(--line); }
+.tocify-header .tocify-item.active,
+.tocify .list-group-item.active {
+  background-color: var(--crimson) !important;
+  border-color: var(--crimson) !important;
+  color: #fff !important;
+}
+.tocify .list-group-item:hover { color: var(--crimson-dark); }
+
+/* ---- Code blocks ---- */
+pre {
+  border-left: 4px solid var(--crimson);
+  background: var(--mist);
+  border-radius: 4px;
+}
+code { color: var(--crimson-dark); }
+
+/* ---- Code-folding buttons ---- */
+.btn-default {
+  background-color: #fff;
+  border-color: var(--crimson);
+  color: var(--crimson);
+}
+.btn-default:hover { background-color: var(--crimson); color: #fff; }
+
+/* ============================================================
+   Callout boxes (Tip / Note / Warning / Key idea)
+   ============================================================ */
+.callout {
+  border-radius: 8px;
+  padding: 0.9em 1.1em;
+  margin: 1.2em 0;
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--crimson);
+  background: var(--mist);
+}
+.callout p:last-child { margin-bottom: 0; }
+.callout .label {
+  display: inline-block;
+  font-weight: 700;
+  color: var(--crimson);
+  margin-bottom: 0.3em;
+  text-transform: uppercase;
+  font-size: 0.8em;
+  letter-spacing: 0.06em;
+}
+.tip     { border-left-color: var(--crimson);      background: var(--crimson-soft); }
+.keyidea { border-left-color: var(--crimson-dark); background: var(--crimson-soft); }
+
+/* ---- Self-check answer reveals ---- */
+details {
+  background: var(--mist);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.6em 0.9em;
+  margin: 0.6em 0 1.2em 0;
+}
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--crimson);
+}
+
+/* ---- Tables ---- */
+table { border-collapse: collapse; }
+th { background: var(--crimson); color: #fff; }

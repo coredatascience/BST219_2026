@@ -1,0 +1,518 @@
+---
+title: "Managing Missing Data"
+subtitle: "Reporting, Diagnosing, and Handling Missing Data"
+output:
+  html_document:
+    css: crimson.css
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 2
+    number_sections: true
+    df_print: paged
+    code_folding: show
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+# This "setup" chunk runs first and stays hidden (include=FALSE). It sets options
+# that apply to every chunk so the whole document looks consistent.
+knitr::opts_chunk$set(
+  echo    = TRUE,     # Show the R code in the final document
+  message = FALSE,    # Hide package start-up messages (keeps output tidy)
+  warning = FALSE,    # Hide warnings (keeps output tidy)
+  comment = "#>"      # Prefix printed output with "#>"
+)
+```
+
+# Introduction {#introduction}
+
+Real-world datasets almost always contain missing values — and how you handle them can quietly make or break an analysis. In public health especially, *why* a value is missing is often informative (a test not ordered, a question skipped, a measurement refused), so missingness is not just a nuisance to delete away. Before any modeling or visualization, you should (1) **report** what's missing, (2) **diagnose** patterns (random vs. systematic), and then (3) **handle** missingness in a way that preserves validity and interpretability. Below we'll walk through quick reporting tools, visual diagnostics, and several imputation strategies — from simple to robust.
+
+**Choosing a method (quick guide):**
+
+* **Exploration/reporting:** `colSums(is.na())`, `skim()`, `gg_miss_var()`, `vis_miss()`
+* **When MCAR is plausible and missingness is small:** complete-case may be okay.
+* **MAR likely and you'll do inference:** multiple imputation (`mice`)
+* **Suspected NMAR:** perform sensitivity analyses; consider selection or pattern-mixture models.
+* **Longitudinal data with slow-changing measures:** LOCF/BOCF (document assumptions)
+* **Fast prototypes/features:** mean/median/mode imputation (avoid for final inference)
+* **Design/eligibility survey question skips:** encode as structural values (0 or "Not applicable")
+
+<div class="callout tip">
+<span class="label">How to use this document &amp; packages you'll need</span>
+Read each section, run the code, and study the output. This lesson uses several packages:
+<code>tidyverse</code>, <code>dslabs</code>, <code>skimr</code>, <code>naniar</code>, <code>rio</code>,
+<code>missMethods</code>, <code>mice</code>, and <code>broom</code>. Install any you're missing with
+<code>install.packages("...")</code>. The imputation examples need <code>linelist_cleaned.rds</code>
+in the same folder (plus <code>crimson.css</code> for styling).
+</div>
+
+# Types of Missingness {#types}
+
+Missingness mechanisms matter because they determine whether simple fixes bias your results.
+
+## MCAR (Missing Completely at Random) {#mcar}
+
+The probability a value is missing is unrelated to observed or unobserved data. Listwise deletion can be unbiased, but you lose power.
+
+* **Solution:** simple imputation methods (mean, median, mode, LOCF, BOCF)
+
+## MAR (Missing At Random) {#mar}
+
+Missingness depends only on observed variables (e.g., GDP missing more in low-income regions). Multiple imputation is appropriate if the imputation model includes those predictors.
+
+* **Solution:** multiple imputation
+
+## NMAR (Not Missing At Random) {#nmar}
+
+Missingness depends on the unobserved value itself (e.g., people with very high income are less likely to report it). Requires sensitivity analyses or explicit modeling of the missingness mechanism.
+
+* **Solution:** Try to collect more data or information about why data is missing; imputation is usually not recommended.
+
+<div class="callout keyidea">
+<span class="label">Key idea</span>
+The mechanism is an <em>assumption</em> you reason about, not something you can read off the data with
+certainty — the data alone generally can't distinguish MAR from NMAR. In practice we often assume MAR
+and proceed with multiple imputation, then run <strong>sensitivity analyses</strong> to check how much
+our conclusions would change if that assumption is wrong.
+</div>
+
+# Simple Imputation Methods {#simple}
+
+There's no one-size-fits-all fix for missing data. We'll start by standardizing sentinel codes (e.g., "Missing", "99", empty strings) to proper `NA`s, then pick a strategy appropriate to our analysis plan.
+
+We'll use the `linelist_cleaned.rds` dataset from the [Epidemiologist R Handbook](https://www.epirhandbook.com/en/). This is a simulated dataset mimicking the West African Ebola outbreak of 2014–2015. There are 5,888 rows and 30 columns.
+
+Here we introduce the `across` function inside of `mutate`. In `dplyr`, `mutate` combined with `across` is the standard way to apply a function (or set of functions) to multiple columns simultaneously. This approach is highly flexible and replaces older functions like `mutate_all`, `mutate_if`, and `mutate_at`.
+
+```{r handling-import, message=FALSE}
+library(tidyverse)
+library(rio)
+
+# Import the linelist and standardize several "missing" codes to real NA values.
+# across(where(is.character), ...) applies the cleaning to every character column.
+ebola <- import("linelist_cleaned.rds", trust = TRUE) %>%
+  mutate(across(where(is.character),
+                ~ na_if(., "Missing") %>%   # "Missing" -> NA
+                  na_if("99") %>%           # "99"      -> NA
+                  na_if("") %>%             # empty string -> NA
+                  na_if(" ")))              # single space -> NA
+glimpse(ebola)
+```
+
+We'll focus on a small set of variables to demonstrate how the code works:
+
+* `fever`: indicator of fever
+* `temp`: temperature in degrees Celsius
+* `outcome`: indicator of recovery or death
+
+```{r handling-subset}
+ebola_subset <- ebola %>%
+  select(temp, fever, outcome)
+
+head(ebola_subset)
+```
+
+We use `colSums` to check how many missing values we have in each column.
+
+```{r handling-colsums}
+colSums(is.na(ebola_subset))
+```
+
+## Mean imputation {#mean}
+
+Mean imputation replaces missing values in a column with the mean of the non-missing values in the same column. This is for numeric values only and uses the `mean` function. We use `replace_na` from `tidyr` to swap `NA`s for a specified value.
+
+```{r mean-impute}
+ebola <- ebola %>%
+  mutate(temp_replace_na_with_mean =
+           replace_na(temp, mean(temp, na.rm = TRUE)))   # na.rm = TRUE ignores NAs in the mean
+
+mean(ebola$temp, na.rm = TRUE)
+mean(ebola$temp_replace_na_with_mean)   # Identical: filling with the mean leaves the mean unchanged
+```
+
+<div class="callout tip">
+<span class="label">Why mean imputation is risky</span>
+Filling every gap with the mean leaves the mean unchanged (as shown above) but <strong>shrinks the
+variance</strong> and distorts relationships between variables. It's fine for a quick prototype, but
+avoid it for final inference.
+</div>
+
+## Median imputation {#median}
+
+Median imputation replaces missing values with the median of the non-missing values. It works for numeric data and is more robust to outliers than mean imputation. We use the `median` function.
+
+```{r median-impute}
+ebola <- ebola %>%
+  mutate(temp_replace_na_with_median =
+           replace_na(temp, median(temp, na.rm = TRUE)))
+
+median(ebola$temp, na.rm = TRUE)
+median(ebola$temp_replace_na_with_median)   # Identical after median imputation
+```
+
+## Mode imputation {#mode}
+
+Mode imputation replaces missing values with the mode (most common value). It's primarily for categorical variables, and we use `impute_mode` from the `missMethods` package. It preserves a plausible level but can over-represent the mode.
+
+```{r mode-table, message=FALSE}
+library(missMethods)
+
+# How many NAs are in the fever column before imputation?
+table(ebola$fever, useNA = "ifany")   # useNA = "ifany" includes an NA count in the table
+```
+
+```{r mode-impute}
+# Replace the NAs with the most common value, then confirm none remain
+ebola$fever <- impute_mode(as.data.frame(ebola$fever))
+
+table(ebola$fever, useNA = "ifany")   # No more NAs
+```
+
+## LOCF and BOCF {#locf-bocf}
+
+Last Observation Carried Forward (LOCF) and Baseline Observation Carried Forward (BOCF) handle missing data in longitudinal studies. LOCF replaces a missing value with the last recorded value for that person; BOCF replaces all of a person's missing values with their baseline (first) measurement.
+
+Here we create a small data frame of patient ID, visit number, and systolic blood pressure (`sbp`).
+
+```{r locf-data}
+data <- data.frame(
+  patID = c(rep(1, 5), rep(2, 5)),       # Two patients, five visits each
+  visit = rep(1:5, 2),
+  sbp = c(139, NA, 129, 125, NA, 127, NA, NA, NA, NA)
+)
+data
+```
+
+Patient 1 had `sbp` recorded on visits 1, 3, and 4, so we impute visits 2 and 5 with the last observed value (LOCF) — visit 1's value carries to visit 2, and visit 4's to visit 5.
+
+Patient 2 had only a baseline measurement and is missing visits 2–5, so carrying it forward *is* BOCF here.
+
+It turns out we only need to call `fill` once: it replaces each `NA` with the last value observed above it, which handles both patients at once.
+
+```{r locf-fill}
+data <- data %>% fill(sbp)   # Carry the last observed value forward into the NAs
+data
+```
+
+<div class="callout tip">
+<span class="label">Caution</span>
+LOCF and BOCF can <strong>flatten true variability and bias trends</strong> (they assume nothing
+changed since the last measurement). Use them only when clinically or operationally justified, and
+document the assumption.
+</div>
+
+# Advanced Imputation Methods {#advanced}
+
+When missingness can be assumed MAR, more advanced methods are warranted. We'll cover regression imputation and multiple imputation; both take the missingness mechanism into account and reduce some of the bias that simple imputation can induce.
+
+## Regression imputation {#regression}
+
+Regression imputation uses a statistical model to **predict** each missing value from the other variables, then replaces the `NA` with the prediction. Here "regression" means any model (linear, logistic, etc.). Use it with caution: the variability of imputed data may be underestimated, even with a good model.
+
+We return to the ebola dataset (re-imported fresh, then cleaned the same way).
+
+```{r reg-reimport}
+ebola <- import("linelist_cleaned.rds", trust = TRUE) %>%
+  mutate(across(where(is.character),
+                ~ na_if(., "Missing") %>%
+                  na_if("99") %>%
+                  na_if("") %>%
+                  na_if(" ")))
+```
+
+We'll use `fever` and `age_years` to predict missing `temp` values. Linear regression fits because temperature is continuous, and it's plausible temperature wasn't taken when a patient presented with chills and aches. First we plot the relationships.
+
+```{r reg-plot-age, warning=FALSE}
+# Keep only rows where the predictors are observed
+ebola <- ebola %>%
+  filter(!is.na(fever) & !is.na(age_years))
+
+ebola %>% ggplot(aes(age_years, temp)) +
+  geom_point(color = "darkred") +
+  xlab("Age (years)") +
+  ylab("Temperature (Degrees Celsius)")
+```
+
+```{r reg-plot-fever, warning=FALSE}
+ebola %>% ggplot(aes(fever, temp)) +
+  geom_boxplot(fill = "darkred") +
+  xlab("Fever indicator") +
+  ylab("Temperature (Degrees Celsius)")
+```
+
+Next we fit the linear model with `lm` (`temp` is the outcome; `fever` and `age_years` are the predictors), then use `predict` to impute `temp` for the rows where it's missing.
+
+```{r reg-fit}
+reg_model <- lm(temp ~ fever + age_years, data = ebola)   # Fit on observed rows
+
+newdata <- ebola %>% filter(is.na(temp))   # The rows needing a prediction
+
+temps_predictions <- predict(reg_model, newdata = newdata)   # Predicted temperatures
+head(temps_predictions)
+```
+
+## Multiple imputation {#multiple}
+
+Why stop with a single imputed value per gap? **Multiple imputation** creates several complete datasets, each with the missing values filled in with plausible (and slightly different) values. It keeps observed values the same across datasets, reduces bias, and — crucially — produces more accurate standard errors by reflecting the uncertainty of imputation.
+
+**Multiple imputation steps:**
+
+1. **Initialization:** Missing values are replaced with plausible values (usually the observed mean).
+2. **Iterative imputation:**
+   * Cycle through each variable with missing values.
+   * Fit a predictive model using the other variables as predictors.
+   * Use the model to predict the missing values for that variable.
+   * The imputed values feed into subsequent iterations for other variables.
+3. **Convergence:** The iterative process continues until imputed values stabilize.
+4. **Multiple datasets:** Repeat the process to produce several completed datasets.
+5. **Analysis and pooling:** Analyze each dataset separately, then pool the results.
+
+The `mice` function from the `mice` package performs multiple imputation. "MICE" stands for *multiple imputation by chained equations*, and it can impute numeric, binary, unordered-categorical, and ordered-categorical data.
+
+```{r mice-pattern, warning=FALSE, message=FALSE}
+library(mice)
+
+model_dataset <- ebola %>%
+  select(temp, fever, age_years)
+
+# Inspect the pattern of missingness across these three variables
+md.pattern(model_dataset)
+colSums(is.na(model_dataset))
+```
+
+```{r mice-fit}
+# Create the imputations
+multiple_imputation = mice(
+  model_dataset,  # dataset
+  seed = 1,       # random seed for reproducibility
+  m = 10,         # number of imputed datasets
+  print = FALSE)
+
+# Fit the same linear model on EACH imputed dataset
+model_fit <- with(multiple_imputation, lm(temp ~ age_years + fever))
+
+# Pool the 10 sets of results into one set of estimates and standard errors
+summary(mice::pool(model_fit))
+```
+
+Compare to a complete-case analysis (which is often biased if the data are not MCAR):
+
+```{r complete-case}
+library(broom)   # tidy() for a clean model-summary table
+
+# Keep only rows with no missing data in these variables
+complete_data <- model_dataset[complete.cases(model_dataset), ]
+
+model_fit <- with(complete_data, lm(temp ~ age_years + fever))
+
+tidy(summary(model_fit))
+```
+
+<div class="callout keyidea">
+<span class="label">Interpretation</span>
+Pooled multiple-imputation estimates typically have <strong>wider standard errors</strong> than a
+single-imputation or complete-case analysis. That's a feature, not a bug: the wider SEs honestly
+reflect the uncertainty introduced by having to impute.
+</div>
+
+# Survey Skip Patterns {#skip}
+
+Public health surveys are vital tools for understanding population health and informing policy. They collect data on health status, behaviors, risk factors, and more, letting researchers identify disparities, track trends, and evaluate interventions — at national, state, or local levels.
+
+A **skip pattern** (also "skip logic" or "conditional branching") directs respondents to different questions based on their answers, so they only see relevant questions. This improves efficiency and engagement — but it also **induces missingness by design**.
+
+When values are missing *by design* (e.g., non-smokers skip smoking questions), they should **not** be imputed as if unknown; they should be filled in logically.
+
+### Example: smoking skip pattern {#skip-smoking}
+
+This synthetic dataset is inspired by several real surveys. A question asked whether the respondent was a current smoker. Those who answered "No" skipped the next two questions (years smoking, cigarettes per day) and went to the number-of-children question.
+
+Because we *know* non-smokers smoke 0 cigarettes a day and have smoked for 0 years, we can replace those `NA`s with `0`.
+
+```{r skip-data}
+data <- data.frame(
+  smoke = c("Yes", "Yes", "No", "No"),
+  smoke_years = c(24, 7, NA, NA),   # NA = skipped because they don't smoke
+  smoke_amt = c(20, 15, NA, NA),
+  children = c(0, 1, 4, 2)
+)
+data
+```
+
+```{r skip-fill}
+data <- data %>%
+  mutate(smoke_years = ifelse(is.na(smoke_years), 0, smoke_years),   # Skipped -> 0 years
+         smoke_amt   = ifelse(is.na(smoke_amt), 0, smoke_amt))       # Skipped -> 0 cigarettes
+
+data
+```
+
+### Example: response bias {#skip-bias}
+
+Response bias occurs when a respondent answers incorrectly or contrary to their true behavior. Causes include misunderstanding and accidental wrong answers. Rather than dropping these individuals, we can sometimes correct values that are *known* to be wrong. The data below are synthetic, but the example mirrors a real survey that needed this kind of correction.
+
+A survey asked students whether they had received a specific federal grant that is only awarded to **domestic** students. All international students should answer "No". But one answered "Yes" and another "I don't know". Since we know these should be "No", we impute "No" and keep the observations.
+
+```{r bias-data}
+data <- data.frame(
+  international = c("Yes", "Yes", "Yes", "No", "No"),
+  grant = c("I don't know", "Yes", "No", "Yes", "No")
+)
+```
+
+```{r bias-show}
+data
+```
+
+```{r bias-fix}
+# For international students, any non-"No" grant answer is known to be wrong -> set to "No"
+data <- data %>%
+  mutate(grant = ifelse(international == "Yes" &
+                        grant != "No", "No", grant))
+data
+```
+
+# Self-Assessment Questions {#self-assessment}
+
+Try each question **before** revealing the answer. They build from foundational to challenging.
+Click **"Show answer"** to check your work.
+
+## Beginner {#beginner}
+
+**Q1.** Name one `naniar` function for visualizing missingness and say what it shows.
+
+<details>
+<summary>Show answer</summary>
+
+`gg_miss_var()` shows the percent missing per variable; `vis_miss()` draws a cell-by-cell heatmap of
+the whole data frame with the overall percent missing.
+
+</details>
+
+## Intermediate {#intermediate}
+
+**Q2.** What do MCAR, MAR, and NMAR each mean, in one sentence apiece?
+
+<details>
+<summary>Show answer</summary>
+
+**MCAR:** the chance of being missing is unrelated to any data. **MAR:** it depends only on
+*observed* variables. **NMAR:** it depends on the *unobserved* value itself (e.g., high earners
+hiding income).
+
+</details>
+
+**Q3.** Why does mean imputation leave the column mean unchanged but still cause problems?
+
+<details>
+<summary>Show answer</summary>
+
+Filling gaps with the mean can't move the mean. But it **reduces the variance** (all imputed values
+are identical) and weakens correlations with other variables, biasing downstream inference.
+
+</details>
+
+**Q4.** A survey's non-smokers skipped the "cigarettes per day" question, leaving `NA`s. Should you
+run multiple imputation on those? Why or why not?
+
+<details>
+<summary>Show answer</summary>
+
+No. Those values are **missing by design**, and we *know* the correct value is `0`. Fill them
+logically (`ifelse(is.na(x), 0, x)`) rather than treating them as unknown.
+
+</details>
+
+## Advanced {#advanced}
+
+**Q5.** Why do pooled multiple-imputation estimates usually have **wider** standard errors than a
+complete-case analysis, and why is that desirable?
+
+<details>
+<summary>Show answer</summary>
+
+Multiple imputation adds the **between-imputation variability** (how much the fills differ across the
+*m* datasets) to the usual within-dataset uncertainty. The wider SEs honestly reflect that we had to
+*estimate* the missing values; a complete-case or single-imputation SE understates that uncertainty.
+
+</details>
+
+**Q6.** In the `mice` workflow, what do the `m` and `seed` arguments control, and why fit the model
+with `with()` and then `pool()`?
+
+<details>
+<summary>Show answer</summary>
+
+`m` is the number of completed datasets to create; `seed` fixes the random draws so results are
+reproducible. `with()` fits the model separately on each of the `m` datasets, and `pool()` combines
+those `m` sets of estimates and standard errors into one (via Rubin's rules).
+
+</details>
+
+**Q7.** You suspect a variable is NMAR. Why is imputation generally *not* recommended, and what
+should you do instead?
+
+<details>
+<summary>Show answer</summary>
+
+Standard imputation assumes the missingness can be explained by *observed* data (MCAR/MAR). Under
+NMAR it depends on the unobserved value itself, so imputed values will be systematically wrong.
+Instead, try to collect data on *why* values are missing, and run **sensitivity analyses** (or
+selection / pattern-mixture models) to see how conclusions change under different NMAR assumptions.
+
+</details>
+
+# Frequently Asked Questions (FAQ) {#faq}
+
+**How do I even know which mechanism (MCAR/MAR/NMAR) I have?**
+You can't know for certain from the data alone — the mechanism is an assumption. Visual tools
+(`vis_miss`, `gg_miss_var`) and tests can *suggest* structure, but MAR vs. NMAR can't be told apart
+from observed data. Reason from how the data were collected, assume MAR as a working default, and
+back it with sensitivity analyses.
+
+**When is it okay to just delete rows with missing data (complete-case analysis)?**
+When missingness is plausibly MCAR and small. Then listwise deletion is roughly unbiased, at the cost
+of some statistical power. If missingness is MAR or NMAR, deletion can bias your results — prefer
+multiple imputation.
+
+**Mean, median, or mode — which simple imputation should I use?**
+Median for numeric data with outliers or skew (more robust than the mean); mean for roughly symmetric
+numeric data; mode for categorical variables. All three are fine for quick prototypes but distort
+variability, so avoid them for final inference.
+
+**What does `replace_na()` do, and how is it different from `na_if()`?**
+They're opposites. `replace_na(x, value)` turns `NA`s *into* a value (imputation). `na_if(x, value)`
+turns a specific value *into* `NA` (cleaning sentinel codes like "99" or "Missing"). We use `na_if()`
+at import and `replace_na()` when imputing.
+
+**Why clean "99", "Missing", and "" to `NA` first?**
+Because R only treats real `NA` as missing. If those sentinel codes stay as text, counts, means, and
+models will treat them as genuine values and give wrong answers. Standardizing them to `NA` up front
+makes every later step correct.
+
+**Is multiple imputation always better than regression imputation?**
+Usually, for inference. Single regression imputation plugs in one predicted value and understates
+uncertainty (SEs too small). Multiple imputation creates several plausible values and pools them, so
+the standard errors properly reflect the imputation uncertainty.
+
+**Should missing-by-design survey answers ever be imputed statistically?**
+No. If a value is missing because the question didn't apply (a non-smoker's cigarette count), you
+already know the logical value — fill it in directly (often `0` or "Not applicable"). Statistical
+imputation would invent variation that shouldn't exist.
+
+**What's the difference between LOCF and BOCF?**
+LOCF carries a person's **last observed** value forward into later gaps; BOCF carries their
+**baseline (first)** value forward into all gaps. Both assume the measure doesn't really change, so
+they can flatten real trends — use them only when that assumption is defensible.
+
+<div class="callout keyidea">
+<span class="label">The big picture</span>
+Missing data is not just a cleaning chore — it's a modeling decision. <strong>Report</strong> it,
+<strong>diagnose</strong> the likely mechanism, then <strong>handle</strong> it with a method matched
+to that mechanism and your goal: simple imputation for quick features, logical fills for
+missing-by-design, and multiple imputation with sensitivity analyses when you need valid inference.
+</div>
